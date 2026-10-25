@@ -1,6 +1,6 @@
 -- One More Quest: "List functionality" (decision 247)
 -- A plain list of everything the addon does, the big things first. No explanation of where or how:
--- just bullet points, grouped under headings (decision 257). Opened from the button at the bottom right of the
+-- just bullet points, grouped under headings (decision 257; brought up to date with group Crafting in decision 352). Opened from the button at the bottom right of the
 -- full options window.
 local ADDON, OMQ = ...
 OMQ = _G.OneMoreQuest
@@ -13,21 +13,21 @@ OMQ.Features = FE
 FE.SECTIONS = {
     { "Playing together", {
         "One more quest: when the vote (/omq) says \"One more quest!\", the arrow leads the group to the next quest every dad has - its objectives, or the turn-in once all are done; no quest in common: a new one everybody can take",
-        "Group statistics for the session, ranked between the dads: XP per hour, levels, gold, yards walked, damage share, killing blows, deaths, near deaths, fights started and more",
+        "Group statistics for the session, ranked between the dads: XP per hour, levels, gold, yards walked and yards on follow, damage share, killing blows, deaths, near deaths, fights started and more",
         "Lifetime statistics of every dad's character",
         "Quests are shared and accepted automatically between dads up to 5 levels apart",
         "Group quest tracker: every dad's progress on shared quests",
         "Meeting point and map pin shared with the group",
-        "Item comparison with the dads: what they wear and an item score for their class and role",
+        "Item score in every item tooltip, for you and for every dad: what each one wears and whether the item is an upgrade for his class and role",
         "Follow the flights of the group",
         "Follow key for the nearest dad",
         "Mana break note when a dad drinks",
-        "Who in the group needs a crafting material, and who carries the materials of a recipe",
     } },
     { "Dungeons", {
         "Group Check before a dungeon: durability, bags, drinks, class items, distance to the entrance",
-        "Dungeon quests of every dad, where each quest starts, with an arrow to the quest giver",
+        "Dungeon quests of every dad, where each quest starts, with an arrow to the quest giver and the rewards scored for you",
         "Best boss loot of a dungeon for you, also for the new Forever dungeons",
+        "Threat meter: everybody's threat on your target, in every group or only in dungeons; as the tank you see who pulls the aggro off you",
         "Arrow to the dungeon entrance, with how to get in",
         "Switch between the dungeons of your level in the Group Check",
         "Progress Check: the milestones of your class, the dungeons and, on request, the quest zones by level; a click on a zone leads to its quest hub",
@@ -42,13 +42,20 @@ FE.SECTIONS = {
         "Spells not on an action bar, placed with one click",
         "Dungeon quests you could still take, when you leave a town, a city or a flight master",
         "Missing buffs, auras, shields, armors, imbues and poisons, cast with one click",
-        "Repair, also before you leave a city",
-        "Buy drinks, and a drink button when your mana is low",
+        "Repair, also before you leave a city or take a flight",
+        "Buy drinks, and a reminder to drink when your mana is low; mages conjure water with one click instead",
         "Profession training and the tool a profession needs",
-        "Pet basics for hunters and warlocks",
+        "Find Minerals and Find Herbs switched on with one click",
+        "Pet basics: hunters call, revive and feed their pet, warlocks summon one of their last three demons",
         "Unspent talent points, opens the talent tree",
         "Low ammo",
-        "Use your elixirs, scrolls, buff food, stones and oils - never, always or in dungeons",
+        "Use your elixirs, scrolls, buff food, stones and oils - never, always or in dungeons; a stone or oil goes on the weapon you click",
+    } },
+    { "Crafting", {
+        "Crafting profit in the profession window: what the materials cost against what the product brings on the auction house, for every recipe",
+        "Cheapest skill-up: two badges mark the cheapest recipe to skill up, by cost and by profit, and every recipe shows its skill-up chance",
+        "Prices of the whole auction house in one scan, plus the vendor prices you have seen; every item tooltip shows the latest price",
+        "Who in the group needs a crafting material, and who carries the materials of a recipe",
     } },
     { "Fun between the dads", {
         "Bets between the dads, decided automatically, debts paid by mail",
@@ -60,9 +67,11 @@ FE.SECTIONS = {
     } },
     { "Comfort", {
         "Quests at the NPC: accepted (not the grey ones), finished ones handed in, the best reward marked by item score",
-        "Auction helper: everything worth more on the auction house, posted with one click each - fast or select mode",
-        "Auction helper, buy mode: weapon upgrades, potions, elixirs, stones, oils, scrolls, buff food and armor kits, bags and quivers for your class - stock up or buy single pieces",
+        "Auction helper: everything worth more on the auction house, posted with one click each - fast or select mode; it starts with a scan of the whole auction house",
+        "Auction helper, buy mode: weapon upgrades, potions, elixirs, stones, oils, scrolls, buff food and armor kits, bags, reagent bags and quivers for your class - stock up or buy single pieces",
+        "Vendor helper: what to sell at the vendor - grey items, gear not worth the auction house or unsold twice, old food and drink, recipes of professions you do not have",
         "Automatic repair, selling of grey items, water and ammo at vendors",
+        "Dad UI: the shared interface of the dads with one click, per character; your old UI can be restored",
         "Chat filter, with a window for the hidden messages",
         "Hide the objective tracker",
         "Sounds for the alerts and the tracker",
