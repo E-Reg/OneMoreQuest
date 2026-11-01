@@ -32,6 +32,7 @@ Data\ForeverPlaces.lua
 Data\DungeonLoot.lua
 Data\QuestRewards.lua
 Data\QuestPlaces.lua
+Data\QuestItems.lua
 Data\QuestZones.lua
 Data\ForeverDungeons.lua
 Data\Milestones.lua
@@ -82,6 +83,7 @@ UI\Tracker.lua
 QuestTracker\Probe.lua
 QuestTracker\Tracker.lua
 UI\QuestTracker.lua
+UI\QuestItem.lua
 Mail\Probe.lua
 Bet\Bets.lua
 Bet\Mail.lua
