@@ -41,65 +41,103 @@ local function tex(parent, layer, r, g, b, a)
     return t
 end
 
+local BACKDROP = BackdropTemplateMixin and "BackdropTemplate" or nil
+local TITLE_FONT, BODY_FONT = "Fonts\\MORPHEUS.TTF", "Fonts\\FRIZQT__.TTF"
+local EDGE = "Interface\\Tooltips\\UI-Tooltip-Border"
+
+local function font(fs, file, size, plain)
+    if fs.SetFont then pcall(fs.SetFont, fs, file, size, "") end
+    if plain and fs.SetShadowOffset then fs:SetShadowOffset(0, 0) end
+    return fs
+end
+
 local function newCard(parent, w, h)
-    local f = CreateFrame("Button", nil, parent)
+    local f = CreateFrame("Button", nil, parent, BACKDROP)
     f:SetSize(w, h)
     f:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-    local e = w >= 180 and 4 or 3
-    f.bg = tex(f, "BACKGROUND")
-    f.bg:SetPoint("TOPLEFT", e, -e); f.bg:SetPoint("BOTTOMRIGHT", -e, e)
-    f.edges = {}
-    for i, p in ipairs({ { "TOPLEFT", "TOPRIGHT", nil, e }, { "BOTTOMLEFT", "BOTTOMRIGHT", nil, e },
-                         { "TOPLEFT", "BOTTOMLEFT", e, nil }, { "TOPRIGHT", "BOTTOMRIGHT", e, nil } }) do
-        local t = tex(f, "BORDER")
-        t:SetPoint(p[1]); t:SetPoint(p[2])
-        if p[3] then t:SetWidth(p[3]) else t:SetHeight(p[4]) end
-        f.edges[i] = t
+    local big = w >= 180
+    local e = big and 5 or 4
+    -- rounded edge in the quality color around a plain face
+    f.round = f.SetBackdrop and true or false
+    if f.round then
+        f:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = EDGE, edgeSize = big and 16 or 13,
+                        insets = { left = e - 1, right = e - 1, top = e - 1, bottom = e - 1 } })
     end
+    f.bg = tex(f, "BACKGROUND")
+    f.bg:SetPoint("TOPLEFT", e - 1, -(e - 1)); f.bg:SetPoint("BOTTOMRIGHT", -(e - 1), e - 1)
+    if f.round then f.bg:Hide() end
+    local m = e + 5
     local artH = math.floor(h * 0.36)
     f.art = tex(f, "ARTWORK")
-    f.art:SetPoint("TOPLEFT", e + 5, -(e + 5)); f.art:SetPoint("TOPRIGHT", -(e + 5), -(e + 5)); f.art:SetHeight(artH)
+    f.art:SetPoint("TOPLEFT", m, -m); f.art:SetPoint("TOPRIGHT", -m, -m); f.art:SetHeight(artH)
+    -- a small rounded frame over the art box (above the 3D model)
+    f.artEdge = CreateFrame("Frame", nil, f, BACKDROP)
+    f.artEdge:SetPoint("TOPLEFT", f.art, "TOPLEFT", -3, 3); f.artEdge:SetPoint("BOTTOMRIGHT", f.art, "BOTTOMRIGHT", 3, -3)
+    f.artEdge:SetFrameLevel((f:GetFrameLevel() or 0) + 5)
+    if f.artEdge.SetBackdrop then f.artEdge:SetBackdrop({ edgeFile = EDGE, edgeSize = 10 }) end
     f.icon = f:CreateTexture(nil, "OVERLAY")
     f.icon:SetSize(math.floor(artH * 0.7), math.floor(artH * 0.7))
     f.icon:SetPoint("CENTER", f.art, "CENTER")
-    f.artH, f.e = artH, e
-    f.title = f:CreateFontString(nil, "OVERLAY", w >= 180 and "GameFontNormalLarge" or "GameFontNormal")
-    f.title:SetPoint("TOPLEFT", f.art, "BOTTOMLEFT", 0, -6); f.title:SetWidth(w - 2 * (e + 5))
-    f.title:SetJustifyH("LEFT")
-    f.line = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    f.line:SetPoint("TOPLEFT", f.title, "BOTTOMLEFT", 0, -4); f.line:SetWidth(w - 2 * (e + 5))
-    f.line:SetJustifyH("LEFT")
+    f.artH, f.e, f.m = artH, e, m
+    local inner = w - 2 * m
+    f.title = font(f:CreateFontString(nil, "OVERLAY", big and "GameFontNormalLarge" or "GameFontNormal"), TITLE_FONT, big and 19 or 15, true)
+    f.title:SetPoint("TOP", f.art, "BOTTOM", 0, -8); f.title:SetWidth(inner)
+    f.title:SetJustifyH("CENTER")
+    f.line = font(f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"), BODY_FONT, big and 12 or 10, true)
+    f.line:SetPoint("TOP", f.title, "BOTTOM", 0, -4); f.line:SetWidth(inner)
+    f.line:SetJustifyH("CENTER")
+    if f.line.SetSpacing then f.line:SetSpacing(2) end
+    -- bottom: tier pips or progress bar, then a thin rule, then date / level left and number right
+    f.rule = tex(f, "OVERLAY")
+    f.rule:SetPoint("BOTTOMLEFT", m, e + 19); f.rule:SetPoint("BOTTOMRIGHT", -m, e + 19); f.rule:SetHeight(1)
     f.pips = {}
     for i = 1, 4 do
         local p = tex(f, "OVERLAY")
-        p:SetSize(8, 8)
-        p:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", e + 5 + (i - 1) * 12, e + 22)
+        p:SetSize(7, 7)
         f.pips[i] = p
     end
-    f.extra = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    f.extra:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", e + 5, e + 34); f.extra:SetWidth(w - 2 * (e + 5))
-    f.extra:SetJustifyH("LEFT")
-    f.footL = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    f.footL:SetPoint("BOTTOMLEFT", e + 5, e + 5)
-    f.footR = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    f.footR:SetPoint("BOTTOMRIGHT", -(e + 5), e + 5)
+    f.extra = font(f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"), BODY_FONT, big and 11 or 9, true)
+    f.extra:SetPoint("BOTTOM", f, "BOTTOM", 0, e + 37); f.extra:SetWidth(inner)
+    f.extra:SetJustifyH("CENTER")
+    f.footL = font(f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"), BODY_FONT, big and 11 or 9, true)
+    f.footL:SetPoint("BOTTOMLEFT", m, e + 6)
+    f.footR = font(f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"), BODY_FONT, big and 11 or 9, true)
+    f.footR:SetPoint("BOTTOMRIGHT", -m, e + 6)
     f.barBg = tex(f, "OVERLAY", .55, .54, .51, 1)
-    f.barBg:SetPoint("BOTTOMLEFT", e + 5, e + 24); f.barBg:SetPoint("BOTTOMRIGHT", -(e + 5), e + 24); f.barBg:SetHeight(5)
+    f.barBg:SetPoint("BOTTOMLEFT", m + 6, e + 26); f.barBg:SetPoint("BOTTOMRIGHT", -(m + 6), e + 26); f.barBg:SetHeight(5)
     f.bar = tex(f, "OVERLAY", .24, .23, .21, 1)
     f.bar:SetPoint("TOPLEFT", f.barBg, "TOPLEFT"); f.bar:SetHeight(5)
     f.back = f:CreateTexture(nil, "OVERLAY")
     f.back:SetSize(math.floor(w * 0.45), math.floor(w * 0.45))
     f.back:SetPoint("CENTER", 0, 10)
-    f.backNum = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    f.backNum = font(f:CreateFontString(nil, "OVERLAY", "GameFontNormal"), TITLE_FONT, big and 18 or 14)
     f.backNum:SetPoint("TOP", f.back, "BOTTOM", 0, -10)
     f.w, f.h = w, h
     f.model, f.card, f.state, f.hover, f.leaving = false, false, false, false, false
     return f
 end
 
-local function setEdge(f, r, g, b) for _, t in ipairs(f.edges) do t:SetColorTexture(r, g, b, 1) end end
+local function setBg(f, r, g, b)
+    if f.round then f:SetBackdropColor(r, g, b, 1) else f.bg:SetColorTexture(r, g, b, 1) end
+end
+local function setEdge(f, r, g, b)
+    if f.round then f:SetBackdropBorderColor(r, g, b, 1) end
+end
+local function setArtEdge(f, r, g, b, a)
+    if f.artEdge.SetBackdropBorderColor then f.artEdge:SetBackdropBorderColor(r, g, b, a or 1) end
+end
+-- n pips centered on the card, just above the rule
+local function placePips(f, n)
+    local step = 11
+    local x0 = -((n - 1) * step) / 2
+    for i = 1, n do
+        local p = f.pips[i]
+        p:ClearAllPoints()
+        p:SetPoint("CENTER", f, "BOTTOM", x0 + (i - 1) * step, f.e + 28)
+    end
+end
 local function showAll(f, list, on) for _, k in ipairs(list) do if on then f[k]:Show() else f[k]:Hide() end end end
-local FACE = { "art", "icon", "title", "line", "extra", "footL", "footR" }
+local FACE = { "art", "artEdge", "icon", "title", "line", "extra", "footL", "footR", "rule" }
 
 local function setModel(f, c, on)
     if f.model then f.model:Hide() end
@@ -122,8 +160,8 @@ local function paint(f, c, state, num, rec, value)
     if state == "down" then
         showAll(f, FACE, false)
         if f.model then f.model:Hide() end
-        f.bg:SetColorTexture(.16, .13, .09, 1)
-        setEdge(f, .29, .23, .13)
+        setBg(f, .16, .13, .09)
+        setEdge(f, .45, .36, .2)
         f.back:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
         f.back:SetDesaturated(true); f.back:SetAlpha(.35)
         f.back:Show(); f.backNum:Show()
@@ -137,9 +175,11 @@ local function paint(f, c, state, num, rec, value)
     f.footR:SetText(num or "")
     if state == "seen" then
         local seen = L:Seen(c.id) or {}
-        f.bg:SetColorTexture(.74, .72, .68, 1)
+        setBg(f, .78, .76, .72)
         setEdge(f, .62, .62, .62)
         f.art:SetColorTexture(.36, .35, .33, 1)
+        setArtEdge(f, .5, .49, .46)
+        f.rule:SetColorTexture(.45, .44, .41, .6)
         f.icon:SetDesaturated(true); f.icon:Show()
         setModel(f, c, false)
         f.title:SetTextColor(.18, .17, .15)
@@ -147,18 +187,20 @@ local function paint(f, c, state, num, rec, value)
         local need = L:Need(c, 1)
         local v = math.min(value or 0, need)
         f.barBg:Show()
-        if v > 0 then f.bar:Show(); f.bar:SetWidth(math.max(1, (f.w - 2 * (f.e + 5)) * v / need)) end
+        if v > 0 then f.bar:Show(); f.bar:SetWidth(math.max(1, (f.w - 2 * (f.m + 6)) * v / need)) end
         f.extra:SetText(math.floor(v) .. " / " .. need); f.extra:SetTextColor(.18, .17, .15)
-        f.footL:SetText("seen with " .. tostring(seen.by or "?")); f.footL:SetTextColor(.18, .17, .15)
+        f.footL:SetText("Seen: " .. tostring(seen.by or "?")); f.footL:SetTextColor(.18, .17, .15)
         f.footR:SetTextColor(.18, .17, .15)
         return
     end
     rec = rec or {}
     local q = L:Quality(c, rec.n)
     local r, g, b = qcolor(q)
-    f.bg:SetColorTexture(.94, .89, .78, 1)
+    setBg(f, .94, .89, .78)
     setEdge(f, r, g, b)
     f.art:SetColorTexture(.11, .09, .06, 1)
+    setArtEdge(f, .55, .43, .2)
+    f.rule:SetColorTexture(.55, .43, .2, .5)
     f.icon:SetDesaturated(false)
     if setModel(f, c, true) then f.icon:Hide() else f.icon:Show() end
     f.title:SetTextColor(.17, .11, .05)
@@ -166,14 +208,15 @@ local function paint(f, c, state, num, rec, value)
     if rec.x then line = line .. " (" .. rec.x .. ")" end
     f.line:SetText(line); f.line:SetTextColor(.17, .11, .05)
     if c.tiers then
+        placePips(f, #c.tiers)
         for i = 1, #c.tiers do
             local p = f.pips[i]
             p:Show()
             if i <= (rec.n or 0) then p:SetColorTexture(r, g, b, 1) else p:SetColorTexture(.85, .8, .69, 1) end
         end
     end
-    local where = rec.l and ("Lvl " .. rec.l) or ""
-    f.footL:SetText(day(rec.t) .. " " .. where); f.footL:SetTextColor(.35, .27, .13)
+    local where = rec.l and ("Level " .. rec.l) or ""
+    f.footL:SetText(day(rec.t) .. "  " .. where); f.footL:SetTextColor(.35, .27, .13)
     f.footR:SetTextColor(.35, .27, .13)
     f.extra:SetText(rec.g and rec.g ~= "" and ("With " .. rec.g) or ""); f.extra:SetTextColor(.24, .17, .09)
 end
@@ -261,7 +304,7 @@ U._Fly = fly
 local toast, toastQueue, toastBusy = nil, {}, false
 
 local function buildToast()
-    toast = CreateFrame("Frame", "OneMoreQuestBookToast", UIParent)
+    toast = CreateFrame("Frame", "OneMoreQuestBookToast", UIParent, BACKDROP)
     toast:SetSize(260, 60)
     toast.w = 260
     toast:SetFrameStrata("HIGH")
@@ -277,13 +320,21 @@ local function buildToast()
         if p[3] then t:SetWidth(p[3]) else t:SetHeight(p[4]) end
         toast.edges[i] = t
     end
+    toast.round = toast.SetBackdrop and true or false
+    if toast.round then
+        toast:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = EDGE, edgeSize = 14,
+                            insets = { left = 3, right = 3, top = 3, bottom = 3 } })
+        toast:SetBackdropColor(.07, .05, .03, .96)
+        toast.bg:Hide()
+        for _, t in ipairs(toast.edges) do t:Hide() end
+    end
     toast.icon = toast:CreateTexture(nil, "ARTWORK")
     toast.icon:SetSize(40, 40); toast.icon:SetPoint("LEFT", 10, 0)
-    toast.head = toast:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    toast.head = font(toast:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall"), BODY_FONT, 10)
     toast.head:SetPoint("TOPLEFT", toast.icon, "TOPRIGHT", 10, 1)
-    toast.title = toast:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    toast.title = font(toast:CreateFontString(nil, "OVERLAY", "GameFontNormal"), TITLE_FONT, 15)
     toast.title:SetPoint("TOPLEFT", toast.head, "BOTTOMLEFT", 0, -2)
-    toast.line = toast:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    toast.line = font(toast:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"), BODY_FONT, 10)
     toast.line:SetPoint("TOPLEFT", toast.title, "BOTTOMLEFT", 0, -2); toast.line:SetWidth(190)
     toast.line:SetJustifyH("LEFT")
     toast.card = false
@@ -301,6 +352,7 @@ local function showToast(item)
     toast.card = item.card or false
     if item.card then r, g, b = qcolor(L:Quality(item.card, item.tier)) end
     for _, t in ipairs(toast.edges) do t:SetColorTexture(r, g, b, 1) end
+    if toast.round then toast:SetBackdropBorderColor(r, g, b, 1) end
     toast.icon:SetTexture(item.icon or (item.card and item.card.icon))
     toast.head:SetText(item.head or "New Journey card")
     toast.title:SetText(item.title or item.card.title)
@@ -394,7 +446,7 @@ local function buildFlex()
     flexCard = newCard(UIParent, 200, 290)
     flexCard:SetFrameStrata("HIGH")
     flexCard:SetClampedToScreen(true)
-    flexCard.banner = flexCard:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    flexCard.banner = font(flexCard:CreateFontString(nil, "OVERLAY", "GameFontNormal"), TITLE_FONT, 17)
     flexCard.banner:SetPoint("BOTTOM", flexCard, "TOP", 0, 6)
     flexCard:SetScript("OnEnter", function(self)
         self.hover = true
