@@ -495,6 +495,26 @@ end
 T._Quest = questDone
 
 local breathAt                 -- when the breath timer started (drowning)
+local ATTACKER_FOR = 15        -- seconds an attacker is remembered for a death
+local plates = {}              -- nameplate units shown now
+-- who hits me: a hostile nameplate that targets me, else my hostile target (on every hit I take)
+local function noteAttacker()
+    local function hostileOn(u)
+        local g = call(UnitGUID, u)
+        local h = call(UnitCanAttack, "player", u)
+        return str(g) and ok(h) and h and g or nil
+    end
+    for u in pairs(plates) do
+        local onMe = UnitIsUnit and call(UnitIsUnit, u .. "target", "player")
+        if ok(onMe) and onMe then
+            local g = hostileOn(u)
+            if g then T.attacker = { guid = g, at = GetTime() }; scan(u); return end
+        end
+    end
+    local g = hostileOn("target")
+    if g then T.attacker = { guid = g, at = GetTime() } end
+end
+T._NoteAttacker = noteAttacker
 local ENV = { "lava", "falld", "drownd" }
 local ENV_WHY = { lava = "lava", falld = "fall", drownd = "drown" }
 local envBase = {}
@@ -537,10 +557,15 @@ local function onDeath()
     elseif breathAt and GetTime() - breathAt >= 55 then
         d.why = "drown"
     else
+        -- the hostile target now, else the last attacker seen (the client may drop the target at death)
         local tg = call(UnitGUID, "target")
         local hostile = call(UnitCanAttack, "player", "target")
+        if not (str(tg) and ok(hostile) and hostile) then
+            tg, hostile = nil, nil
+            if T.attacker and GetTime() - T.attacker.at <= ATTACKER_FOR then tg, hostile = T.attacker.guid, true end
+        end
         local kind, id = parseGuid(tg)
-        if kind and ok(hostile) and hostile then
+        if kind and hostile then
             if kind == "Player" then
                 d.why = "player"
                 local e = lookup(tg) or scan("target") or {}
@@ -922,7 +947,9 @@ local EVENTS = {
     PLAYER_TARGET_CHANGED = function() scan("target") end,
     UPDATE_MOUSEOVER_UNIT = function() scan("mouseover") end,
     PLAYER_FOCUS_CHANGED = function() scan("focus") end,
-    NAME_PLATE_UNIT_ADDED = function(unit) scan(unit) end,
+    NAME_PLATE_UNIT_ADDED = function(unit) if unit then plates[unit] = true end; scan(unit) end,
+    NAME_PLATE_UNIT_REMOVED = function(unit) if unit then plates[unit] = nil end end,
+    UNIT_COMBAT = function(unit, action) if unit == "player" and action == "WOUND" then noteAttacker() end end,
     UNIT_TARGET = function(unit) if unit and unit ~= "player" then scan(unit .. "target") end end,
     ZONE_CHANGED_NEW_AREA = enterMap,
     ZONE_CHANGED = enterMap,
