@@ -9,7 +9,7 @@ local W, ROW_H, PAD = 220, 24, 12
 local O = {}
 OMQ.Options = O
 
-local frame, rows, snoozeBtn
+local frame, rows, snoozeBtn, bookBtn, baseH
 
 local function makeCheck(parent, text, get, set)
     local row = CreateFrame("Button", nil, parent)
@@ -82,15 +82,31 @@ local function build()
         O:Refresh()
         OMQ:Fire("SETTINGS_CHANGED", "quick")
     end)
-    y = y - 28 - PAD
+    y = y - 28
 
-    frame:SetSize(W, -y)
+    -- opens the journal; only there once its first tab is open (Stats/Ledger.lua)
+    bookBtn = CreateFrame("Button", nil, frame)
+    bookBtn:SetSize(W - 2 * PAD, 28)
+    bookBtn:SetPoint("TOPLEFT", PAD, y - 6)
+    bookBtn.bg = bookBtn:CreateTexture(nil, "BACKGROUND")
+    bookBtn.bg:SetAllPoints()
+    bookBtn.bg:SetColorTexture(0.24, 0.19, 0.09, 1)
+    bookBtn.label = bookBtn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    bookBtn.label:SetPoint("CENTER")
+    bookBtn.label:SetText("Forever Journey")
+    bookBtn:SetScript("OnClick", function()
+        O:Hide()
+        if OMQ.LedgerUI then OMQ.LedgerUI:Toggle() end
+    end)
+    baseH = -y + PAD
+
+    frame:SetSize(W, baseH)
     frame.elapsed = 0
     frame:SetScript("OnUpdate", function(self, dt)
         self.elapsed = self.elapsed + dt
         if self.elapsed > 1 then self.elapsed = 0; O:Refresh() end
     end)
-    O.ui = { frame = frame, rows = rows, snooze = snoozeBtn }
+    O.ui = { frame = frame, rows = rows, snooze = snoozeBtn, book = bookBtn }
     frame:Hide()
     if UISpecialFrames then table.insert(UISpecialFrames, "OneMoreQuestOptions") end
 end
@@ -99,6 +115,9 @@ function O:Refresh()
     if not frame then return end
     for _, r in ipairs(rows) do r:Refresh() end
     snoozeBtn.label:SetText(OMQ.Settings:SnoozeLabel("Snooze"))
+    local open = OMQ.Ledger and OMQ.Ledger:Open()
+    if open then bookBtn:Show() else bookBtn:Hide() end
+    frame:SetSize(W, baseH + (open and 34 or 0))
 end
 
 function O:Show()

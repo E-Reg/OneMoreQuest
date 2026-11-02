@@ -193,7 +193,9 @@ function M:Apply()
     self.pulsing = st.voting
     button.icon:SetDesaturated(st.paused)
     if st.paused then button.icon:SetVertexColor(0.7, 0.72, 0.78) else button.icon:SetVertexColor(1, 1, 1) end
-    button.icon:SetAlpha(st.paused and 0.8 or 1)
+    -- dimmed while showing cards rests after a counter (UI/Ledger.lua)
+    local resting = OMQ.LedgerUI and OMQ.LedgerUI:Resting()
+    button.icon:SetAlpha(st.paused and 0.8 or (resting and 0.55 or 1))
     if st.paused then button.z:Show() else button.z:Hide() end
     if #st.differs > 0 then button.dot:Show() else button.dot:Hide() end
     if not st.voting then button.glow:SetAlpha(0) end
