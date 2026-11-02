@@ -1,8 +1,8 @@
-## Interface: 16001
+## Interface: 16001, 120000
 ## Title: One More Quest
 ## Notes: Group stats, distance arrow, alerts and quest sync for a leveling party. Type /omq
 ## Author: MadDadVibe
-## Version: 0.54.44
+## Version: 0.54.45
 ## SavedVariables: OMQDB
 
 Core.lua
