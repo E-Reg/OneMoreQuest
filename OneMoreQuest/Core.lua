@@ -117,8 +117,8 @@ end
 ----------------------------------------------------------------------
 local commands = {}
 
-function OMQ:RegisterCommand(name, fn, help)
-    commands[name] = { fn = fn, help = help }
+function OMQ:RegisterCommand(name, fn, help, hidden)
+    commands[name] = { fn = fn, help = help, hidden = hidden }
 end
 
 -- Master switches of the option categories (alerts, group, guidance, vendor)
@@ -157,7 +157,7 @@ SlashCmdList["ONEMOREQUEST"] = function(input)
     if cmd == "help" then
         OMQ:Print("commands:")
         local names = {}
-        for n in pairs(commands) do names[#names + 1] = n end
+        for n, c in pairs(commands) do if not c.hidden then names[#names + 1] = n end end
         table.sort(names)
         for _, n in ipairs(names) do
             print("  /omq " .. n .. " - " .. (commands[n].help or ""))

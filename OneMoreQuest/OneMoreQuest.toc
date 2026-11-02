@@ -20,6 +20,7 @@ Stats\Ranking.lua
 Stats\Share.lua
 Stats\Lifetime.lua
 Stats\Pull.lua
+Stats\Tally.lua
 UI\Tooltip.lua
 UI\LifetimeWindow.lua
 Arrow.lua
