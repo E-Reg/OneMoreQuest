@@ -720,8 +720,18 @@ local function onLootMsg(msg)
     local b = book()
     if not b then return end
     patterns()
-    local hex = msg:match("|cff(%x%x%x%x%x%x)|Hitem:")
-    local q = hex and QUALITY[hex:lower()]
+    note("loot.msg")
+    -- quality: newer clients write "|cnIQ3:", older ones the color "|cff0070dd"; else ask the game
+    local q = tonumber(msg:match("|cnIQ(%d):"))
+    if not q then
+        local hex = msg:match("|cff(%x%x%x%x%x%x)|Hitem:")
+        q = hex and QUALITY[hex:lower()]
+    end
+    if not q and C_Item and C_Item.GetItemQualityByID then
+        local id = tonumber(msg:match("|Hitem:(%d+)"))
+        local iq = id and call(C_Item.GetItemQualityByID, id)
+        if num(iq) then q = iq end
+    end
     if matches(patCreate, msg) then
         b.prof.crafted = b.prof.crafted + 1
         if not b.prof.first then b.prof.first = time() end
@@ -730,6 +740,8 @@ local function onLootMsg(msg)
         inc(b.loot, q)
         if q == 3 then first(b, "blue") elseif q == 4 then first(b, "epic") end
         note("loot")
+    elseif matches(patLoot, msg) then
+        note("loot.noquality")
     end
 end
 T._LootMsg = onLootMsg
