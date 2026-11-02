@@ -85,7 +85,8 @@ local function newBook()
         v = VERSION,
         since = { t = time(), lvl = myLevel() },
         secs = 0,                          -- active seconds (not AFK) since the start
-        kills = { total = 0, mine = 0, solo = 0, fullbag = 0, npc = {}, type = {}, lvl = {}, color = {}, rank = {} },
+        kills = { total = 0, mine = 0, solo = 0, fullbag = 0, npc = {}, type = {}, lvl = {}, color = {}, rank = {}, rankOut = {} },
+        zones = {},                        -- real zones (Barrens, Feralas), above sub maps
         pvp = { n = 0, color = {}, class = {}, race = {}, victims = {}, killedBy = { n = 0, color = {}, class = {}, players = {} } },
         npcs = {}, people = {}, maps = {}, quests = {}, deaths = {}, dungeons = {}, levels = {}, firsts = {},
         days = {}, spells = {}, support = { res = 0, buffOthers = 0, healOthers = 0 },
@@ -216,9 +217,11 @@ T.Color = color
 local lastXp = -100
 local bossSet
 
+local EXTRA_BOSSES = { 1716, 10813 }    -- final bosses without a loot table in Data/DungeonLoot.lua
 local function isBoss(id)
     if not bossSet then
         bossSet = {}
+        for _, b in ipairs(EXTRA_BOSSES) do bossSet[b] = true end
         for _, list in pairs(OMQ.DungeonLoot or {}) do
             for _, boss in ipairs(list) do if boss[1] then bossSet[boss[1]] = true end end
         end
@@ -294,6 +297,11 @@ local function record(victim, mine, killerIsMe)
     local rank = e and e.rank or "unknown"
     if isBoss(id) then rank = "boss" end
     incPair(k.rank, rank, mine)
+    local inside = IsInInstance and call(IsInInstance)
+    if not (ok(inside) and inside) then
+        k.rankOut = k.rankOut or {}
+        incPair(k.rankOut, rank, mine)
+    end
     if rank == "elite" or rank == "rareelite" then first(b, "elite", id) end
     if rank == "rare" or rank == "rareelite" then first(b, "rare", id) end
     if rank == "boss" then first(b, "boss", id) end
@@ -308,7 +316,11 @@ local function record(victim, mine, killerIsMe)
         local p = b.people[g]
         if p then p.k = (p.k or 0) + 1 end
     end
-    if dungeon and (rank == "boss" or isBoss(id)) and id then dungeon.boss[id] = time() end
+    if dungeon and (rank == "boss" or isBoss(id)) and id then
+        local dads = 1
+        for g in pairs(grp) do if OMQ.users and OMQ.users[g] then dads = dads + 1 end end
+        dungeon.boss[id] = { t = time(), dads = dads }
+    end
     note("kill")
 end
 T._Record = record
@@ -360,10 +372,29 @@ T._OnPartyKill = onPartyKill
 ----------------------------------------------------------------------
 -- Places, dungeons, people
 ----------------------------------------------------------------------
+-- the zone a map belongs to (caves and towns have their own maps)
+local function zoneOf(id)
+    if not (C_Map and C_Map.GetMapInfo) then return nil end
+    local zoneType = Enum and Enum.UIMapType and Enum.UIMapType.Zone or 3
+    for _ = 1, 6 do
+        local info = call(C_Map.GetMapInfo, id)
+        if type(info) ~= "table" then return nil end
+        if info.mapType == zoneType then return id end
+        if not num(info.parentMapID) or info.parentMapID == 0 then return nil end
+        id = info.parentMapID
+    end
+end
+T.ZoneOf = zoneOf
+
 local function enterMap()
     local b = book()
     if not b then return end
     local id = currentMap()
+    local zone = id and zoneOf(id)
+    if zone then
+        b.zones = b.zones or {}
+        if not b.zones[zone] then b.zones[zone] = { t = time(), l = myLevel() }; note("zone.new") end
+    end
     if id then
         T.map = id
         local m = b.maps[id]
@@ -829,6 +860,9 @@ function T:Streak()
     end
     return cur, best
 end
+
+-- a value of the game's statistics tab by the key Stats/Lifetime.lua found it under (aucp, aucg, deaths ...)
+function T:GameStat(key) return statValue(key) end
 
 function T:Explored(mapID)
     if not (C_MapExplorationInfo and C_MapExplorationInfo.GetExploredMapTextures) then return nil end

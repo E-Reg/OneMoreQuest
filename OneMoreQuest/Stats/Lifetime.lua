@@ -99,10 +99,12 @@ local DAMAGE_W  = { "damage", "schaden" }
 local AUCTION_W = { "auction", "auktion" }
 local MONEY_W   = { "gold", "money", "geld", "copper", "kupfer" }
 local POSTED_W  = { "posted", "created", "eingestellt", "erstellt" }
+local EARNED_W  = { "earned", "made", "sold", "verdient", "eingenommen", "verkauf" }
 local BOUGHT_W  = { "won", "purchase", "bought", "gewonnen", "gekauft", "erworben", "käufe" }
 
 local function classify(name)
     local n = name:lower()
+    if has(n, AUCTION_W) and has(n, MONEY_W) and has(n, EARNED_W) then return "aucg" end
     if has(n, AUCTION_W) and not has(n, MONEY_W) then
         if has(n, POSTED_W) then return "aucp" end
         if has(n, BOUGHT_W) then return "aucb" end
