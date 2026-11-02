@@ -447,7 +447,13 @@ local function buildFlex()
     flexCard:SetFrameStrata("HIGH")
     flexCard:SetClampedToScreen(true)
     flexCard.banner = font(flexCard:CreateFontString(nil, "OVERLAY", "GameFontNormal"), TITLE_FONT, 17)
-    flexCard.banner:SetPoint("BOTTOM", flexCard, "TOP", 0, 6)
+    flexCard.banner:SetPoint("TOP", flexCard, "BOTTOM", 0, -6)
+    -- what the shown card means for this dad, in the free space above the footer
+    flexCard.note = font(flexCard:CreateFontString(nil, "OVERLAY", "GameFontHighlight"), BODY_FONT, 12, true)
+    flexCard.note:SetPoint("BOTTOM", flexCard, "BOTTOM", 0, 52); flexCard.note:SetWidth(200 - 2 * flexCard.m)
+    flexCard.note:SetJustifyH("CENTER")
+    if flexCard.note.SetSpacing then flexCard.note:SetSpacing(3) end
+    U.flexCard = flexCard
     flexCard:SetScript("OnEnter", function(self)
         self.hover = true
         local own = L:Owned(self.card.id)
@@ -479,6 +485,11 @@ local function showFlex(item)
     local own = L:Owned(item.card.id)
     paint(flexCard, item.card, "own", nil, own and { n = item.tier, t = own.t, l = own.l, g = own.g } or { n = item.tier }, res and res[item.card.id] and res[item.card.id].v)
     flexCard.footL:SetText(""); flexCard.extra:SetText("")
+    if own then
+        flexCard.note:SetText("You own this card\nLeft-click to counter " .. item.name); flexCard.note:SetTextColor(.08, .45, .05)
+    else
+        flexCard.note:SetText("You miss this card\nYou got flexed by " .. item.name); flexCard.note:SetTextColor(.55, .08, .05)
+    end
     flexCard.banner:SetText(item.name .. " shows a card!")
     flexCard:Show()
     if OMQ.Sound and OMQ.Sound.Play then pcall(OMQ.Sound.Play, OMQ.Sound, "popup") end
