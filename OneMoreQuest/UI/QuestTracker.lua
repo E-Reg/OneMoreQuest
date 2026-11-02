@@ -212,6 +212,7 @@ local function build()
     frame:SetScript("OnUpdate", function(self, elapsed)
         local over = false
         if self.IsMouseOver then local ok, v = pcall(self.IsMouseOver, self); over = ok and v and true or false end
+        if not over and OMQ.QuestItem and OMQ.QuestItem:IsMouseOver() then over = true end   -- its item button (354)
         OMQ.QTrack:SetHover(over)
         acc = acc + (elapsed or 0)
         if acc >= 0.25 then acc = 0; U:Render() end          -- the light on a changed cell fades
