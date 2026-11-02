@@ -86,7 +86,7 @@ local function newBook()
         since = { t = time(), lvl = myLevel() },
         secs = 0,                          -- active seconds (not AFK) since the start
         kills = { total = 0, mine = 0, solo = 0, fullbag = 0, npc = {}, type = {}, lvl = {}, color = {}, rank = {} },
-        pvp = { n = 0, color = {}, class = {}, race = {}, victims = {}, killedBy = { n = 0, color = {}, class = {} } },
+        pvp = { n = 0, color = {}, class = {}, race = {}, victims = {}, killedBy = { n = 0, color = {}, class = {}, players = {} } },
         npcs = {}, people = {}, maps = {}, quests = {}, deaths = {}, dungeons = {}, levels = {}, firsts = {},
         days = {}, spells = {}, support = { res = 0, buffOthers = 0, healOthers = 0 },
         move = { foot = 0, mount = 0, swim = 0, flights = 0, jumps = 0 },
@@ -464,6 +464,31 @@ end
 T._Quest = questDone
 
 local breathAt                 -- when the breath timer started (drowning)
+local ENV = { "lava", "falld", "drownd" }
+local ENV_WHY = { lava = "lava", falld = "fall", drownd = "drown" }
+local envBase = {}
+local function statValue(key)
+    local ids = OMQ.Lifetime and OMQ.Lifetime.StatIds and OMQ.Lifetime:StatIds()
+    local id = ids and ids[key]
+    if not id or not GetStatistic then return nil end
+    local v = call(GetStatistic, id)
+    if not str(v) then return nil end
+    local digits = v:gsub("[%s,%.]", "")
+    return digits:match("^%d+$") and tonumber(digits) or nil
+end
+local function envSnapshot() for _, k in ipairs(ENV) do envBase[k] = statValue(k) end end
+T._EnvSnapshot = envSnapshot
+-- a few seconds after a death: did the game count it as lava, falling or drowning?
+local function envResolve(d)
+    for _, k in ipairs(ENV) do
+        local now = statValue(k)
+        if now and envBase[k] and now > envBase[k] then
+            if k == "lava" or d.why == "unknown" or d.why == "npc" then d.why, d.id = ENV_WHY[k], nil end
+            note("death.stat." .. k)
+        end
+    end
+    envSnapshot()
+end
 local function onDeath()
     local b = book()
     if not b then return end
@@ -492,6 +517,14 @@ local function onDeath()
                 kb.n = kb.n + 1
                 inc(kb.color, color(e.lvl, myLevel()))
                 if e.class then inc(kb.class, e.class) end
+                kb.players = kb.players or {}
+                local kp = kb.players[tg]
+                if not kp then
+                    local count = 0
+                    for _ in pairs(kb.players) do count = count + 1 end
+                    if count < MAX_VICTIMS then kp = { n = 0, c = e.class, t = time() }; kb.players[tg] = kp end
+                end
+                if kp then kp.n = kp.n + 1 end
             else
                 d.why, d.id = "npc", id
             end
@@ -511,6 +544,7 @@ local function onDeath()
     if streak > b.records.longestNoDeath then b.records.longestNoDeath = streak end
     b.lastDeathSecs = b.secs
     note("death." .. d.why)
+    C_Timer.After(3, function() pcall(envResolve, d) end)
 end
 T._Death = onDeath
 
@@ -885,6 +919,7 @@ end)
 OMQ:On("READY", function()
     T.ready = true
     pcall(login)
+    C_Timer.After(10, function() pcall(envSnapshot) end)
     C_Timer.NewTicker(1, function()
         local fine, err = pcall(tick)
         if not fine then note("err.tick"); OMQ:Error("tally tick", err) end
