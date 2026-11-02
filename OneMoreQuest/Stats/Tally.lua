@@ -583,6 +583,8 @@ local function onDeath()
                 if kp then kp.n = kp.n + 1 end
             else
                 d.why, d.id = "npc", id
+                local e = lookup(tg)
+                d.c = color(e and e.lvl, myLevel())
             end
         else
             d.why = "unknown"
