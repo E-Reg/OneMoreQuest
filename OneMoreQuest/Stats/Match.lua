@@ -26,14 +26,22 @@ M.LOST_AFTER = 120
 M.MAX_RIVALS = 50
 
 M.STATS = {
-    { id = "lvl", name = "Level", hint = "Level of the foe" },
-    { id = "kills", name = "Kills", hint = "How often it died" },
-    { id = "blows", name = "Killing Blows", hint = "Your own killing blows" },
-    { id = "rarity", name = "Rarity", hint = "Normal 1 up to boss 5" },
-    { id = "daring", name = "Daring", hint = "Its level minus yours at the first kill" },
-    { id = "veteran", name = "Veteran", hint = "Days since the first kill" },
-    { id = "grudge", name = "Grudge", hint = "How often it killed you" },
-    { id = "loyalty", name = "Loyalty", hint = "Days with a kill" },
+    { id = "lvl", name = "Level", hint = "Level of the foe",
+      desc = "The level of the foe. For foes you met at several levels, the highest one counts." },
+    { id = "kills", name = "Kills", hint = "How often it died",
+      desc = "How often this foe died while you were there, by your hand or your group's." },
+    { id = "blows", name = "Killing Blows", hint = "Your own killing blows",
+      desc = "How often you dealt the killing blow yourself." },
+    { id = "rarity", name = "Rarity", hint = "Normal 1 up to boss 5",
+      desc = "How rare the foe is: Normal 1, Rare 2, Elite 3, Rare Elite 4, Boss 5." },
+    { id = "daring", name = "Daring", hint = "Its level minus yours at the first kill",
+      desc = "The foe's level minus your level when you first killed it. High means you started the fight as the underdog." },
+    { id = "veteran", name = "Veteran", hint = "Days since the first kill",
+      desc = "How many days ago you killed this foe for the first time." },
+    { id = "grudge", name = "Grudge", hint = "How often it killed you",
+      desc = "How often this foe killed you. Revenge counts." },
+    { id = "loyalty", name = "Loyalty", hint = "Days with a kill",
+      desc = "On how many different days you killed this foe." },
 }
 M.byStat = {}
 for _, s in ipairs(M.STATS) do M.byStat[s.id] = s end

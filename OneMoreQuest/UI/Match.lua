@@ -50,6 +50,20 @@ local function boxed(f, r, g, b)
     end
 end
 local function setEdge(f, c) if f.SetBackdropBorderColor then f:SetBackdropBorderColor(c[1], c[2], c[3], 1) end end
+local function hex(c) return string.format("%02x%02x%02x", math.floor(c[1] * 255), math.floor(c[2] * 255), math.floor(c[3] * 255)) end
+
+-- the tooltip of a value: what it means, and whether it was already played
+function W:StatTip(owner, stat)
+    local s = M.byStat[stat or ""]
+    if not (s and GameTooltip) then return end
+    GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
+    GameTooltip:AddLine(s.name, GOLD[1], GOLD[2], GOLD[3])
+    GameTooltip:AddLine(s.desc or s.hint, 1, 1, 1, true)
+    local c = M.cur
+    if c and c.used and c.used[stat] then GameTooltip:AddLine("Already played in this duel.", .6, .6, .6, true) end
+    GameTooltip:Show()
+end
+local function hideTip() if GameTooltip then GameTooltip:Hide() end end
 
 function W:ValueText(stat, v)
     v = tonumber(v) or 0
@@ -114,6 +128,12 @@ local function mobView(parent, w, h, tall, ratio)
     v.label:SetPoint("LEFT", v.valBg, "LEFT", 10, 0)
     v.value = font(v:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge"), TITLE_FONT, tall and 30 or 22)
     v.value:SetPoint("RIGHT", v.valBg, "RIGHT", -10, 0)
+    v.valHit = CreateFrame("Frame", nil, v)
+    v.valHit:SetAllPoints(v.valBg)
+    v.valHit:EnableMouse(true)
+    v.valHit:SetScript("OnEnter", function(self) W:StatTip(self, v.statId) end)
+    v.valHit:SetScript("OnLeave", hideTip)
+    v.valHit:Hide()
     v.facing = 0
     v:SetScript("OnUpdate", function(self, dt)
         if self.model:IsShown() and self.model.SetFacing then
@@ -156,8 +176,9 @@ W._SetMob = setMob
 
 local function setValue(v, stat, value, c)
     local s = M.byStat[stat or ""]
-    if not s then v.valBg:Hide(); v.label:SetText(""); v.value:SetText(""); return end
-    v.valBg:Show()
+    v.statId = s and s.id
+    if not s then v.valBg:Hide(); v.valHit:Hide(); v.label:SetText(""); v.value:SetText(""); return end
+    v.valBg:Show(); v.valHit:Show()
     v.label:SetText(s.name); color(v.label, PLAIN)
     v.value:SetText(value ~= nil and W:ValueText(stat, value) or "?")
     color(v.value, c or PLAIN)
@@ -221,21 +242,19 @@ local function build()
     f.barBg:SetSize(110, 5); f.barBg:SetPoint("TOPRIGHT", f.timer, "BOTTOMRIGHT", 0, -4)
     f.bar = tex(f, "OVERLAY", .78, .64, .29, 1)
     f.bar:SetHeight(5); f.bar:SetPoint("TOPLEFT", f.barBg, "TOPLEFT")
-    f.score = font(f:CreateFontString(nil, "OVERLAY", "GameFontHighlight"), BODY_FONT, 12)
-    f.score:SetPoint("RIGHT", f.timer, "LEFT", -24, -6)
-    f.score:SetJustifyH("RIGHT")
 
-    -- footer: the values, played ones dimmed
-    f.pills = {}
-    local pw = math.floor((WIDTH - 2 * PAD - 50) / #M.STATS)
-    f.pillHead = font(f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"), BODY_FONT, 11)
-    f.pillHead:SetPoint("BOTTOMLEFT", PAD, 13); f.pillHead:SetText("Values:"); color(f.pillHead, PLAIN)
-    for i, s in ipairs(M.STATS) do
-        local p = font(f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"), BODY_FONT, 11)
-        p:SetPoint("BOTTOMLEFT", PAD + 50 + (i - 1) * pw, 13)
-        p:SetText(s.name)
-        f.pills[i] = p
-    end
+    -- footer: the current results
+    f.foot = tex(f, "BORDER", .15, .114, .075, 1)
+    f.foot:SetPoint("BOTTOMLEFT", 4, 4); f.foot:SetPoint("BOTTOMRIGHT", -4, 4); f.foot:SetHeight(FOOT - 4)
+    f.footLine = tex(f, "ARTWORK", .54, .43, .18, 1)
+    f.footLine:SetPoint("BOTTOMLEFT", 4, FOOT); f.footLine:SetPoint("BOTTOMRIGHT", -4, FOOT); f.footLine:SetHeight(1)
+    f.resHead = font(f:CreateFontString(nil, "OVERLAY", "GameFontNormal"), TITLE_FONT, 15)
+    f.resHead:SetPoint("BOTTOMLEFT", PAD, 11); f.resHead:SetText("Current Results:"); color(f.resHead, GOLD)
+    f.results = font(f:CreateFontString(nil, "OVERLAY", "GameFontHighlight"), BODY_FONT, 13)
+    f.results:SetPoint("LEFT", f.resHead, "RIGHT", 12, 0)
+    f.results:SetPoint("RIGHT", f, "BOTTOMRIGHT", -PAD, 0)
+    f.results:SetJustifyH("LEFT")
+    if f.results.SetWordWrap then f.results:SetWordWrap(false) end
 
     local function pane()
         local p = CreateFrame("Frame", nil, f)
@@ -258,6 +277,19 @@ local function build()
         local v = mobView(f.pickPane, cw, BODY - 20, true, 0.34)
         v:SetPoint("TOPLEFT", PAD + (i - 1) * (cw + 10), -10)
         v.valBg:Hide()
+        -- the whole card is the button
+        v.hit = CreateFrame("Button", nil, v)
+        v.hit:SetAllPoints(v)
+        if v.hit.SetFrameLevel and v.GetFrameLevel then v.hit:SetFrameLevel((v:GetFrameLevel() or 1) + 2) end
+        v.hit:RegisterForClicks("LeftButtonUp")
+        v.hit:SetScript("OnClick", function() W:PickCard(i) end)
+        v.hit:SetScript("OnEnter", function() W:HoverCard(i, true) end)
+        v.hit:SetScript("OnLeave", function() W:HoverCard(i, false) end)
+        v.glow = tex(v, "BACKGROUND", 1, .85, .45, .07)
+        v.glow:SetPoint("TOPLEFT", 3, -3); v.glow:SetPoint("BOTTOMRIGHT", -3, 3)
+        v.glow:Hide()
+        v.state = font(v:CreateFontString(nil, "OVERLAY", "GameFontNormal"), TITLE_FONT, 15)
+        v.state:SetPoint("BOTTOM", 0, 14)
         v.rows = {}
         for k, s in ipairs(M.STATS) do
             local l = font(v:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"), BODY_FONT, 10)
@@ -265,12 +297,17 @@ local function build()
             local r = font(v:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"), BODY_FONT, 10)
             r:SetPoint("TOPRIGHT", v.info, "BOTTOMRIGHT", 0, -8 - (k - 1) * 13)
             l:SetText(s.name)
-            v.rows[k] = { l = l, r = r, stat = s.id }
+            -- each value row explains itself on hover and still picks the card on click
+            local h = CreateFrame("Button", nil, v.hit)
+            h:SetPoint("TOPLEFT", l, "TOPLEFT", -2, 2)
+            h:SetPoint("BOTTOMRIGHT", r, "BOTTOMRIGHT", 2, -1)
+            h:RegisterForClicks("LeftButtonUp")
+            h.stat = s.id
+            h:SetScript("OnClick", function() W:PickCard(i) end)
+            h:SetScript("OnEnter", function(self) W:HoverCard(i, true); W:StatTip(self, self.stat) end)
+            h:SetScript("OnLeave", function() hideTip(); W:HoverCard(i, false) end)
+            v.rows[k] = { l = l, r = r, stat = s.id, hit = h }
         end
-        v.pick = button(v, cw - 20, 26, "Pick")
-        v.pick:SetPoint("BOTTOM", 0, 10)
-        v.pick.index = i
-        v.pick:SetScript("OnClick", function(self) M:Pick(self.index) end)
         f.offers[i] = v
     end
     f.side = CreateFrame("Frame", nil, f.pickPane, BACKDROP)
@@ -385,14 +422,31 @@ W._RevealViews = revealViews
 ----------------------------------------------------------------------
 -- Painting
 ----------------------------------------------------------------------
-local function playerText(c)
+-- the class of a dad: me from my own client, the others from what the group told us
+function W:ClassOf(p)
+    local me = OMQ:GetSelf()
+    if me and p.guid == me.guid then return me.class end
+    local u = OMQ.users and OMQ.users[p.guid]
+    return u and u.class
+end
+
+local function classHex(class)
+    local c = RAID_CLASS_COLORS and class and RAID_CLASS_COLORS[class]
+    if c then return hex({ c.r, c.g, c.b }) end
+    return hex({ .91, .87, .78 })
+end
+
+function W:ResultsText(c)
     local parts = {}
-    for i, p in ipairs(c.players) do
-        local s = p.name .. " " .. p.score
-        if p.left then s = "|cff777777" .. s .. "|r" elseif i == c.me then s = "|cffe8c766" .. s .. "|r" end
-        parts[#parts + 1] = s
+    for _, p in ipairs(c.players) do
+        local pts = (p.score or 0) == 1 and "1 Point" or ((p.score or 0) .. " Points")
+        if p.left then
+            parts[#parts + 1] = "|cff777777" .. p.name .. ": " .. pts .. " (left)|r"
+        else
+            parts[#parts + 1] = "|cff" .. classHex(self:ClassOf(p)) .. p.name .. "|r: |cffffffff" .. pts .. "|r"
+        end
     end
-    return table.concat(parts, "   ")
+    return table.concat(parts, "   |cff8a6e2e||r   ")
 end
 
 local function showPane(name)
@@ -415,6 +469,43 @@ local function roundText(c)
     return "Round " .. c.round .. " of " .. M.ROUNDS
 end
 
+function W:SetResults(text)
+    local f = self.frame
+    f.results:SetText(text or "")
+    if text then f.resHead:Show() else f.resHead:Hide() end
+end
+
+-- a card lights up under the mouse while it can be picked
+W.hover = {}
+function W:PaintCard(i)
+    local f, c = self.frame, M.cur
+    local v = f and f.offers[i]
+    if not (v and c) then return end
+    local id = c.offers and c.offers[i]
+    local chosen = id ~= nil and c.choice == id
+    local open = c.phase == "pick"
+    local lit = open and self.hover[i]
+    setEdge(v, (chosen or lit) and GOLD or EDGE_PLAIN)
+    if v.SetBackdropColor then
+        if lit then v:SetBackdropColor(.2, .155, .1, 1) else v:SetBackdropColor(.14, .105, .07, 1) end
+    end
+    if lit then v.glow:Show() else v.glow:Hide() end
+    if chosen then v.state:SetText("Picked"); color(v.state, GOLD)
+    elseif lit then v.state:SetText("Click to pick"); color(v.state, GOLD)
+    else v.state:SetText("") end
+end
+
+function W:HoverCard(i, on)
+    self.hover[i] = on or nil
+    self:PaintCard(i)
+end
+
+function W:PickCard(i)
+    local c = M.cur
+    if not (c and c.phase == "pick") then return end
+    M:Pick(i)
+end
+
 local function paintPick(c)
     local f = W.frame
     showPane("pickPane")
@@ -431,11 +522,7 @@ local function paintPick(c)
                 local col = c.used[r.stat] and DIM or { .91, .87, .78 }
                 color(r.l, col); color(r.r, col)
             end
-            local chosen = c.choice == id
-            setEdge(v, chosen and GOLD or EDGE_PLAIN)
-            v.pick.label:SetText(chosen and "Picked" or "Pick")
-            if picked then v.pick:Disable() else v.pick:Enable() end
-            color(v.pick.label, chosen and GOLD or (picked and DIM or GOLD))
+            W:PaintCard(i)
         else
             v:Hide()
         end
@@ -586,13 +673,12 @@ function W:Refresh()
             showPane("waitPane")
             f.waitText:SetText("Waiting for " .. tostring(M.waiting.hostName) .. " to start the duel ...")
             f.sub:SetText("Dad Duel - 5 rounds")
-            f.score:SetText("")
+            W:SetResults(nil)
             setTimer(M.waiting.deadline - GetTime(), M.INVITE_TIME)
         end
         return
     end
-    f.score:SetText(c.phase == "invite" and "" or playerText(c))
-    for i, s in ipairs(M.STATS) do color(f.pills[i], (c.used and c.used[s.id]) and DIM or { .91, .87, .78 }) end
+    self:SetResults(c.phase ~= "invite" and self:ResultsText(c) or nil)
     if c.phase == "invite" then
         showPane("waitPane")
         local parts = {}
@@ -631,6 +717,7 @@ end
 function W:Close()
     if M.cur then M:Leave() end
     M.waiting = nil
+    self.hover = {}
     if self.frame then self.frame:Hide() end
 end
 
