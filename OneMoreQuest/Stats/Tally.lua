@@ -172,6 +172,8 @@ local function scan(unit)
     local cl = call(UnitClassification, unit)
     if str(cl) then e.rank = RANKS[cl] or "normal" end
     if e.lvl == -1 and e.rank ~= "boss" then e.rank = "boss" end
+    local name = call(UnitName, unit)
+    if str(name) then e.name = name end
     local isPlayer = call(UnitIsPlayer, unit)
     if ok(isPlayer) and isPlayer then
         e.player = true
@@ -283,12 +285,6 @@ local function record(victim, mine, killerIsMe)
     if solo then k.solo = k.solo + 1 end
     local free = freeSlots()
     if free == 0 then k.fullbag = k.fullbag + 1 end
-    if id then
-        local n = k.npc[id]
-        if not n then n = { n = 0, m = 0, t = time(), l = me }; k.npc[id] = n end
-        n.n = n.n + 1
-        if mine then n.m = n.m + 1 end
-    end
     incPair(k.type, e and e.type or "unknown", mine)
     local lvl = e and e.lvl
     if lvl and lvl > 0 then incPair(k.lvl, lvl, mine) end
@@ -301,6 +297,29 @@ local function record(victim, mine, killerIsMe)
     if not (ok(inside) and inside) then
         k.rankOut = k.rankOut or {}
         incPair(k.rankOut, rank, mine)
+    end
+    if id then
+        -- per mob: counts plus what it was (name as the client showed it, type, rank, levels, where, which days)
+        local n = k.npc[id]
+        if not n then
+            n = { n = 0, m = 0, g = 0, dy = 0, t = time(), l = me, z = T.map }
+            n.zn = n.z and T.ZoneOf and T.ZoneOf(n.z) or nil
+            k.npc[id] = n
+        end
+        n.n = n.n + 1
+        if mine then n.m = n.m + 1 end
+        if e and e.name and not n.nm then n.nm = e.name end
+        if e and e.type and not n.ty then n.ty = e.type end
+        if rank ~= "unknown" then n.rk = rank end
+        if lvl and lvl > 0 then
+            if not n.lo or lvl < n.lo then n.lo = lvl end
+            if not n.hi or lvl > n.hi then n.hi = lvl end
+        end
+        local key = today()
+        if n.ld ~= key then n.dy = (n.dy or 0) + 1; n.ld = key end
+        for g in pairs(grp) do
+            if OMQ.users and OMQ.users[g] then n.g = (n.g or 0) + 1; break end
+        end
     end
     if rank == "elite" or rank == "rareelite" then first(b, "elite", id) end
     if rank == "rare" or rank == "rareelite" then first(b, "rare", id) end
