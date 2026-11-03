@@ -56,13 +56,17 @@ local function newCard(parent, w, h)
     f:SetSize(w, h)
     f:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     local big = w >= 180
-    local e = big and 5 or 4
+    local e = big and 7 or 6
     -- rounded edge in the quality color around a plain face
     f.round = f.SetBackdrop and true or false
     if f.round then
-        f:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = EDGE, edgeSize = big and 16 or 13,
-                        insets = { left = e - 1, right = e - 1, top = e - 1, bottom = e - 1 } })
+        f:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = EDGE, edgeSize = big and 24 or 20,
+                        insets = { left = e - 2, right = e - 2, top = e - 2, bottom = e - 2 } })
     end
+    -- a second, thin line in the quality color just inside the rounded edge
+    f.inner = CreateFrame("Frame", nil, f, BACKDROP)
+    f.inner:SetPoint("TOPLEFT", e - 1, -(e - 1)); f.inner:SetPoint("BOTTOMRIGHT", -(e - 1), e - 1)
+    if f.inner.SetBackdrop then f.inner:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 2 }) end
     f.bg = tex(f, "BACKGROUND")
     f.bg:SetPoint("TOPLEFT", e - 1, -(e - 1)); f.bg:SetPoint("BOTTOMRIGHT", -(e - 1), e - 1)
     if f.round then f.bg:Hide() end
@@ -122,6 +126,7 @@ local function setBg(f, r, g, b)
 end
 local function setEdge(f, r, g, b)
     if f.round then f:SetBackdropBorderColor(r, g, b, 1) end
+    if f.inner.SetBackdropBorderColor then f.inner:SetBackdropBorderColor(r, g, b, .75) end
 end
 local function setArtEdge(f, r, g, b, a)
     if f.artEdge.SetBackdropBorderColor then f.artEdge:SetBackdropBorderColor(r, g, b, a or 1) end
@@ -172,7 +177,7 @@ local function paint(f, c, state, num, rec, value)
     showAll(f, FACE, true)
     f.icon:SetTexture(c.icon)
     f.title:SetText(c.title)
-    f.footR:SetText(num or "")
+    f.footR:SetText("")
     if state == "seen" then
         local seen = L:Seen(c.id) or {}
         setBg(f, .78, .76, .72)
@@ -215,8 +220,8 @@ local function paint(f, c, state, num, rec, value)
             if i <= (rec.n or 0) then p:SetColorTexture(r, g, b, 1) else p:SetColorTexture(.85, .8, .69, 1) end
         end
     end
-    local where = rec.l and ("Level " .. rec.l) or ""
-    f.footL:SetText(day(rec.t) .. "  " .. where); f.footL:SetTextColor(.35, .27, .13)
+    f.footL:SetText(day(rec.t)); f.footL:SetTextColor(.35, .27, .13)
+    f.footR:SetText(rec.l and ("Level " .. rec.l) or "")
     f.footR:SetTextColor(.35, .27, .13)
     f.extra:SetText(rec.g and rec.g ~= "" and ("With " .. rec.g) or ""); f.extra:SetTextColor(.24, .17, .09)
 end
@@ -426,6 +431,8 @@ local flexCard, flexQueue, flexBusy, flexItem = nil, {}, false, nil
 local countered = {}          -- fid -> true (one counter per shown card)
 
 function U:Resting() return time() < (self.restUntil or 0) end
+U.cardRest = {}               -- card id -> time: the same card can be shown again only after 5 minutes
+function U:CardResting(id) return time() < (self.cardRest[id] or 0) end
 
 function U:Flex(id)
     local c = L:Card(id)
@@ -433,11 +440,13 @@ function U:Flex(id)
     if not rec then return false end
     if not OMQ:GetChannel() then OMQ:Print("join a group to show a card"); return false end
     if self:Resting() then OMQ:Print("showing cards rests for " .. mmss(self.restUntil - time())); return false end
+    if self:CardResting(id) then OMQ:Print(c.title .. " can be shown again in " .. mmss(self.cardRest[id] - time())); return false end
     local me = OMQ:GetSelf()
     if not me then return false end
     local fid = tostring(time()) .. tostring(math.random(100, 999))
     if not OMQ:Send("LF", me.guid, me.name, id, rec.n or 1, fid) then return false end
     lastFlex = { fid = fid, id = id }
+    self.cardRest[id] = time() + REST
     OMQ:Print("shown to the group: " .. c.title)
     return true
 end
@@ -484,7 +493,7 @@ local function showFlex(item)
     local res = L:Evaluate()
     local own = L:Owned(item.card.id)
     paint(flexCard, item.card, "own", nil, own and { n = item.tier, t = own.t, l = own.l, g = own.g } or { n = item.tier }, res and res[item.card.id] and res[item.card.id].v)
-    flexCard.footL:SetText(""); flexCard.extra:SetText("")
+    flexCard.footL:SetText(""); flexCard.footR:SetText(""); flexCard.extra:SetText("")
     if own then
         flexCard.note:SetText("You own this card\nLeft-click to counter " .. item.name); flexCard.note:SetTextColor(.08, .45, .05)
     else
@@ -598,10 +607,21 @@ local function build()
     local cx = close:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     cx:SetPoint("CENTER"); cx:SetText("x"); cx:SetTextColor(.79, .73, .61)
     close:SetScript("OnClick", function() U:Hide() end)
+    -- "Cards of others" with a visible on/off switch
     f.flexBtn = CreateFrame("Button", nil, f)
-    f.flexBtn:SetSize(150, 22); f.flexBtn:SetPoint("RIGHT", close, "LEFT", -10, 0)
+    f.flexBtn:SetSize(170, 22); f.flexBtn:SetPoint("RIGHT", close, "LEFT", -12, 0)
+    local sw = CreateFrame("Frame", nil, f.flexBtn, BACKDROP)
+    sw:SetSize(46, 20); sw:SetPoint("RIGHT")
+    if sw.SetBackdrop then
+        sw:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = EDGE, edgeSize = 10,
+                         insets = { left = 2, right = 2, top = 2, bottom = 2 } })
+    end
+    sw.knob = tex(sw, "OVERLAY", .93, .9, .82, 1)
+    sw.knob:SetSize(14, 12)
+    sw.text = font(sw:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"), BODY_FONT, 9)
+    f.flexBtn.switch = sw
     f.flexBtn.label = f.flexBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    f.flexBtn.label:SetPoint("RIGHT")
+    f.flexBtn.label:SetPoint("RIGHT", sw, "LEFT", -8, 0)
     f.flexBtn:SetScript("OnClick", function()
         OMQ.db.options.bookFlexOff = not OMQ.db.options.bookFlexOff or nil
         U:Refresh()
@@ -614,7 +634,12 @@ local function build()
         cw:SetPoint("TOPLEFT", PAD + col * (CW + GAP), -(64 + 14 + row * (CH + GAP)))
         cw:SetScript("OnEnter", function(self)
             if self.state == "down" or not self.card then return end
-            tooltip(self, self.card, self.state == "own" and "Click: show it to your group" or nil)
+            local hint
+            if self.state == "own" then
+                hint = U:CardResting(self.card.id) and ("Shown recently - again in " .. mmss(U.cardRest[self.card.id] - time()))
+                    or "Click: show it to your group"
+            end
+            tooltip(self, self.card, hint)
         end)
         cw:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
         cw:SetScript("OnClick", function(self) if self.state == "own" then U:Flex(self.card.id) end end)
@@ -694,7 +719,18 @@ function U:Refresh()
     local own, all = L:Counts(self.tab)
     local ownAll, allAll = L:Counts()
     f.sub:SetText(tabName(self.tab) .. " - " .. own .. " of " .. all .. " cards - " .. ownAll .. " of " .. allAll .. " in total")
-    f.flexBtn.label:SetText((OMQ.db.options.bookFlexOff and "Cards of others: off" or "Cards of others: on"))
+    local on = not OMQ.db.options.bookFlexOff
+    local sw = f.flexBtn.switch
+    f.flexBtn.label:SetText("Cards of others")
+    sw.state = on and "on" or "off"
+    sw.knob:ClearAllPoints(); sw.text:ClearAllPoints()
+    if on then
+        if sw.SetBackdropColor then sw:SetBackdropColor(.12, .55, .1, 1); sw:SetBackdropBorderColor(.3, .85, .25, 1) end
+        sw.knob:SetPoint("RIGHT", -4, 0); sw.text:SetPoint("LEFT", 6, 0); sw.text:SetText("On")
+    else
+        if sw.SetBackdropColor then sw:SetBackdropColor(.2, .18, .15, 1); sw:SetBackdropBorderColor(.5, .47, .42, 1) end
+        sw.knob:SetPoint("LEFT", 4, 0); sw.text:SetPoint("RIGHT", -5, 0); sw.text:SetText("Off")
+    end
     for i, cw in ipairs(f.cards) do
         local idx = (self.page - 1) * per + i
         local c = list[idx]
