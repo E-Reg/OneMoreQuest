@@ -135,6 +135,8 @@ end
 local slots = {}            -- [itemID] = { kind, from, guid, at } from the open loot window
 local won = {}              -- [itemID] = time of "You won"
 local questAt, questID = -100, nil
+local questOpen, questOpenID = false, nil   -- the reward page of a quest is open
+local pushed = {}                           -- items pushed as "other" just now: { e, at }
 local merchantOpen, mailOpen = false, false
 
 local function onLootOpened()
@@ -161,6 +163,7 @@ local function origin(id, how)
     if how == "before" or how == "craft" then return how end
     if how == "push" then
         if now - questAt <= PUSH_WINDOW then return "quest", questID end
+        if questOpen then return "quest", questOpenID end
         if merchantOpen then return "vendor" end
         if mailOpen then return "mail" end
         return "other"
@@ -232,6 +235,7 @@ function H:Add(text, how)
     end
     b.gear[key] = e
     b.gearN = b.gearN + 1
+    if how == "push" and e.src == "other" then pushed[#pushed + 1] = { e = e, at = GetTime() } end
     fill(e, link, 0)
     note("gear.new")
     note("gear." .. (e.src or "short"))
@@ -381,10 +385,27 @@ end
 ----------------------------------------------------------------------
 -- Wiring
 ----------------------------------------------------------------------
+-- the reward can come before the turn-in event: items pushed just before it were its reward
+local function questDone(id)
+    questAt, questID = GetTime(), num(id) and id or nil
+    for _, p in ipairs(pushed) do
+        if questAt - p.at <= PUSH_WINDOW and p.e.src == "other" then p.e.src, p.e.from = "quest", questID; note("gear.quest.late") end
+    end
+    pushed = {}
+end
+local function questPage()
+    questOpen = true
+    local id = GetQuestID and call(GetQuestID)
+    questOpenID = num(id) and id > 0 and id or nil
+end
+H._QuestDone = questDone
+
 local EVENTS = {
     CHAT_MSG_LOOT = onLootMsg,
     LOOT_OPENED = onLootOpened,
-    QUEST_TURNED_IN = function(id) questAt, questID = GetTime(), num(id) and id or nil end,
+    QUEST_TURNED_IN = questDone,
+    QUEST_COMPLETE = questPage,
+    QUEST_FINISHED = function() questOpen = false end,
     MERCHANT_SHOW = function() merchantOpen = true end,
     MERCHANT_CLOSED = function() merchantOpen = false end,
     MAIL_SHOW = function() mailOpen = true end,
