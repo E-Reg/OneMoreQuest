@@ -9,7 +9,7 @@ local W = {}
 OMQ.MatchUI = W
 local M = OMQ.Match
 
-local WIDTH, HEIGHT, HEAD, FOOT, PAD = 720, 480, 60, 36, 16
+local WIDTH, HEIGHT, HEAD, FOOT, PAD = 720, 500, 60, 56, 16
 local BODY = HEIGHT - HEAD - FOOT
 local BACKDROP = BackdropTemplateMixin and "BackdropTemplate" or nil
 local EDGE = "Interface\\Tooltips\\UI-Tooltip-Border"
@@ -183,6 +183,7 @@ local function setValue(v, stat, value, c)
     v.value:SetText(value ~= nil and W:ValueText(stat, value) or "?")
     color(v.value, c or PLAIN)
 end
+W._SetValue = setValue
 
 ----------------------------------------------------------------------
 -- The window
@@ -249,11 +250,10 @@ local function build()
     f.footLine = tex(f, "ARTWORK", .54, .43, .18, 1)
     f.footLine:SetPoint("BOTTOMLEFT", 4, FOOT); f.footLine:SetPoint("BOTTOMRIGHT", -4, FOOT); f.footLine:SetHeight(1)
     f.resHead = font(f:CreateFontString(nil, "OVERLAY", "GameFontNormal"), TITLE_FONT, 15)
-    f.resHead:SetPoint("BOTTOMLEFT", PAD, 11); f.resHead:SetText("Current Results:"); color(f.resHead, GOLD)
+    f.resHead:SetPoint("BOTTOM", 0, 31); f.resHead:SetText("Current Results:"); color(f.resHead, GOLD)
     f.results = font(f:CreateFontString(nil, "OVERLAY", "GameFontHighlight"), BODY_FONT, 13)
-    f.results:SetPoint("LEFT", f.resHead, "RIGHT", 12, 0)
-    f.results:SetPoint("RIGHT", f, "BOTTOMRIGHT", -PAD, 0)
-    f.results:SetJustifyH("LEFT")
+    f.results:SetPoint("BOTTOM", 0, 11)
+    f.results:SetJustifyH("CENTER")
     if f.results.SetWordWrap then f.results:SetWordWrap(false) end
 
     local function pane()
@@ -446,7 +446,7 @@ function W:ResultsText(c)
             parts[#parts + 1] = "|cff" .. classHex(self:ClassOf(p)) .. p.name .. "|r: |cffffffff" .. pts .. "|r"
         end
     end
-    return table.concat(parts, "   |cff8a6e2e||r   ")
+    return table.concat(parts, "   |cff8a6e2e|||r   ")
 end
 
 local function showPane(name)
@@ -471,7 +471,13 @@ end
 
 function W:SetResults(text)
     local f = self.frame
-    f.results:SetText(text or "")
+    -- one line over the whole width: a smaller font when five long names do not fit
+    for _, size in ipairs({ 13, 12, 11, 10 }) do
+        font(f.results, BODY_FONT, size)
+        f.results:SetText(text or "")
+        local w = f.results.GetStringWidth and f.results:GetStringWidth()
+        if type(w) ~= "number" or w <= WIDTH - 2 * PAD then break end
+    end
     if text then f.resHead:Show() else f.resHead:Hide() end
 end
 

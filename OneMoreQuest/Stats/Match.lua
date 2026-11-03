@@ -122,17 +122,25 @@ function M:Pool(b)
 end
 
 -- three random foes, without the ones I already played in this match
+-- (fresh foes first; when there are too few, played ones fill up to three)
 function M:Draw(skip)
-    local pool, out = {}, {}
-    for _, id in ipairs(self:Pool()) do if not (skip and skip[id]) then pool[#pool + 1] = id end end
-    if #pool == 0 then pool = self:Pool() end
-    for _ = 1, self.OFFERS do
-        if #pool == 0 then break end
-        local i = math.random(1, #pool)
-        out[#out + 1] = table.remove(pool, i)
+    local fresh, played, out = {}, {}, {}
+    for _, id in ipairs(self:Pool()) do
+        if skip and skip[id] then played[#played + 1] = id else fresh[#fresh + 1] = id end
+    end
+    for _, pool in ipairs({ fresh, played }) do
+        while #out < self.OFFERS and #pool > 0 do
+            out[#out + 1] = table.remove(pool, math.random(1, #pool))
+        end
     end
     return out
 end
+
+-- only the first name of a dad (characters have two-part names on WoW Forever)
+function M.Short(name)
+    return tostring(name or "?"):match("^%S+") or "?"
+end
+local short = M.Short
 
 function M:Unlocked()
     local level = UnitLevel and call(UnitLevel, "player")
@@ -194,7 +202,7 @@ local function groupDads()
     local list = {}
     local me = OMQ:GetSelf()
     for guid, u in pairs(OMQ.users or {}) do
-        if (not me or guid ~= me.guid) and OMQ:IsOnline(u) then list[#list + 1] = { guid = guid, name = u.name or "?" } end
+        if (not me or guid ~= me.guid) and OMQ:IsOnline(u) then list[#list + 1] = { guid = guid, name = short(u.name) } end
     end
     table.sort(list, function(a, b) return a.name < b.name end)
     return list
@@ -211,7 +219,7 @@ function M:Challenge()
     local me = OMQ:GetSelf()
     local id = tostring(time() % 100000) .. tostring(math.random(100, 999))
     self.cur = { id = id, me = 1, phase = "invite", deadline = now() + self.INVITE_TIME,
-                 players = { { guid = me.guid, name = me.name, score = 0 } }, answers = {}, asked = {} }
+                 players = { { guid = me.guid, name = short(me.name), score = 0 } }, answers = {}, asked = {} }
     for _, d in ipairs(dads) do self.cur.asked[d.guid] = d.name end
     out("MI", id, me.guid, me.name)
     note("challenge")
@@ -227,7 +235,7 @@ function M:Demo(count)
     if not me then return false, "not ready" end
     count = math.max(1, math.min(4, tonumber(count) or 1))
     local names = { "Bot Alpha", "Bot Bravo", "Bot Charlie", "Bot Delta" }
-    local players = { { guid = me.guid, name = me.name, score = 0 } }
+    local players = { { guid = me.guid, name = short(me.name), score = 0 } }
     for i = 1, count do players[#players + 1] = { guid = "bot" .. i, name = names[i], score = 0, bot = true } end
     self.cur = { id = "demo", me = 1, demo = true, players = players }
     self:Begin(1)
@@ -280,7 +288,7 @@ local function onInvite(f)
         note("invite.quiet")
         return
     end
-    M.invite = { id = id, host = host, hostName = hostName or "?", deadline = now() + M.INVITE_TIME }
+    M.invite = { id = id, host = host, hostName = short(hostName), deadline = now() + M.INVITE_TIME }
     note("invite")
     OMQ:Fire("MATCH_INVITE", M.invite)
     changed()
@@ -290,7 +298,7 @@ local function onAnswer(f)
     local c = M.cur
     local id, guid, name, yes = f[1], f[2], f[3], f[4] == "1"
     if not c or c.id ~= id or c.phase ~= "invite" or not M:IsHost() then return end
-    c.answers[guid] = { yes = yes, name = name or "?" }
+    c.answers[guid] = { yes = yes, name = short(name) }
     local all = true
     for g in pairs(c.asked) do if not c.answers[g] then all = false end end
     changed()
@@ -307,7 +315,7 @@ local function onStart(f)
     local guids, names = split(f[2]), split(f[3])
     local players, mine = {}, nil
     for i, g in ipairs(guids) do
-        players[i] = { guid = g, name = names[i] or "?", score = 0 }
+        players[i] = { guid = g, name = short(names[i]), score = 0 }
         if g == me.guid then mine = i end
     end
     if not mine then note("start.without"); changed(); return end
