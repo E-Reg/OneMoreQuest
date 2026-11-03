@@ -39,6 +39,7 @@ local function note(key, n) T.diag[key] = (T.diag[key] or 0) + (n or 1) end
 
 local dateFn = date or (os and os.date)
 local function today() return dateFn and dateFn("%Y-%m-%d", time()) or "?" end
+T.Today = today
 
 -- "Creature-0-1-2-3-3100-0000" -> "Creature", 3100; "Player-1-ABC" -> "Player"
 local function parseGuid(guid)
@@ -230,6 +231,7 @@ local function isBoss(id)
     end
     return id and bossSet[id] or false
 end
+T.IsBoss = isBoss
 
 local function freeSlots()
     if not (C_Container and C_Container.GetContainerNumFreeSlots) then return nil end
@@ -298,6 +300,7 @@ local function record(victim, mine, killerIsMe)
         k.rankOut = k.rankOut or {}
         incPair(k.rankOut, rank, mine)
     end
+    if id then T.lastKill = { id = id, guid = victim, at = GetTime() } end
     if id then
         -- per mob: counts plus what it was (name as the client showed it, type, rank, levels, where, which days)
         local n = k.npc[id]
@@ -745,6 +748,7 @@ local function toPattern(fmt)
     p = p:gsub("\001", "(.+)"):gsub("\002", "(%%d+)")
     return "^" .. p
 end
+T.ToPattern = toPattern
 local patLoot, patCreate
 local function patterns()
     if patLoot then return end
@@ -1056,8 +1060,10 @@ function T:Report(part)
         for _, k in ipairs(keys) do line[#line + 1] = k .. "=" .. T.diag[k] end
         print("  " .. (#line > 0 and table.concat(line, " ") or "nothing yet"))
         print("  cache " .. count(cur) .. "+" .. count(old) .. ", map " .. tostring(T.map) .. ", dungeon " .. tostring(dungeon and dungeon.id))
+        if OMQ.Haul then OMQ.Haul:Line() end
         return
     end
+    if part == "gear" and OMQ.Haul then OMQ.Haul:Report(); return end
     local k = b.kills
     OMQ:Print("tally since level " .. b.since.lvl .. ", active " .. math.floor(b.secs / 60) .. " min, afk " .. math.floor(b.afk / 60) .. " min")
     if part == "" or part == "kills" then
@@ -1089,6 +1095,7 @@ function T:Report(part)
             b.gather.herb, b.gather.fish, top(b.gather.node, nil, 3)))
         local m = T.map and T:Explored(T.map)
         if m then print("  explored overlays here: " .. m) end
+        if OMQ.Haul then OMQ.Haul:Line() end
     end
 end
 
