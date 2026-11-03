@@ -24,6 +24,9 @@ local sequence = 0
 local frame, cards, moreText
 local moveMode = false
 local inCombat = false
+-- the card frame holds secure buttons, so it is protected itself: no Show, Hide, move or mouse change while
+-- the combat lockdown is on (it caused "Interface action failed" at the start of a fight)
+local function locked() return InCombatLockdown and InCombatLockdown() and true or false end
 local atAuction = false     -- the auction house is open: no cards (decision 261)
 local alpha, targetAlpha = 0, 1
 
@@ -422,6 +425,7 @@ local function wornWeapon(slot)
     return tex
 end
 function M.RefreshWeapons(card)
+    if locked() then return end           -- secure buttons: no Show, Hide or move in combat
     if type(rawget(card, "wb")) ~= "table" then card.wb = {} end
     local n = 0
     for _, slot in ipairs(WEAPON_SLOTS) do
@@ -579,6 +583,8 @@ M._slotKey = slotKey
 
 function M:Render()
     if not frame then return end
+    -- in combat the frame is hidden (decision 52) and its secure cards must not change; the combat end renders again
+    if locked() then return end
     local list = moveMode and DEMO or self:GetActive()
     local was = {}
     for i = 1, MAX_CARDS do if slotKey[i] then was[slotKey[i]] = i end end
@@ -673,7 +679,7 @@ pcall(ahWatch.RegisterEvent, ahWatch, "AUCTION_HOUSE_CLOSED")
 ahWatch:SetScript("OnEvent", function(_, event)
     atAuction = (event == "AUCTION_HOUSE_SHOW")
     -- open cards close at once (no fade) and come back when the auction house closes (decision 262)
-    if atAuction and frame then alpha, targetAlpha = 0, 0; frame:SetAlpha(0); frame:Hide() end
+    if atAuction and frame then alpha, targetAlpha = 0, 0; frame:SetAlpha(0); if not locked() then frame:Hide() end end
     if M.Evaluate then M:Evaluate() end
 end)
 
@@ -684,15 +690,15 @@ local function fade(_, elapsed)
         if targetAlpha > alpha then alpha = math.min(alpha + FADE_SPEED * elapsed, 1)
         else alpha = math.max(alpha - FADE_SPEED * elapsed, 0) end
         frame:SetAlpha(alpha)
-        if alpha == 0 then frame:Hide() end
-    elseif alpha == 0 and frame:IsShown() then
+        if alpha == 0 and not locked() then frame:Hide() end
+    elseif alpha == 0 and frame:IsShown() and not locked() then
         frame:Hide()          -- invisible cards must not catch mouse clicks
     end
 end
 
 function M:SetMoveMode(on)
     moveMode = on and true or false
-    if frame then
+    if frame and not locked() then
         frame:EnableMouse(moveMode)
         -- the cards sit on top of the frame and would swallow the drag
         for _, card in ipairs(cards) do card:EnableMouse(not moveMode) end
@@ -708,7 +714,9 @@ driver:RegisterEvent("PLAYER_REGEN_DISABLED")
 driver:RegisterEvent("PLAYER_REGEN_ENABLED")
 driver:SetScript("OnEvent", function(_, event)
     inCombat = (event == "PLAYER_REGEN_DISABLED")
-    M:Render()
+    -- the lockdown starts right after this event: hide the cards at once (a fade would end in combat)
+    if inCombat and frame and not locked() then alpha, targetAlpha = 0, 0; frame:SetAlpha(0); frame:Hide() end
+    if inCombat then M:Render() else M:SetMoveMode(moveMode) end      -- catches up what waited for the combat end
     OMQ:Fire("ALERT_COMBAT", inCombat)
 end)
 driver:SetScript("OnUpdate", fade)
