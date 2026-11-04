@@ -280,8 +280,7 @@ function R:Start()
     local will, handle = call(PlaySoundFile, path, "Master")
     if not will then note("sound.off") end
     r.handle, r.soundOff = handle, not will
-    local offset = (OMQ.db and num(OMQ.db.rhythmOffset) and OMQ.db.rhythmOffset or 0) / 1000
-    r.t0 = now() + offset
+    r.t0 = now() + (self.LATENCY + self:Offset()) / 1000
     r.phase = "play"
     changed()
 end
@@ -291,6 +290,20 @@ function R:SongTime()
     local r = self.run
     if not r or not r.t0 then return nil end
     return now() - r.t0
+end
+
+-- built-in sound delay in ms (measured in game: the sound reaches the ear about 160 ms after PlaySoundFile);
+-- /omq rhythm offset adds a personal correction on top of it
+R.LATENCY = 160
+
+-- personal correction in ms; a value saved before the built-in delay existed is moved by it once,
+-- so the timing stays exactly the same (a saved 160 becomes 0)
+function R:Offset()
+    local db = OMQ.db
+    if not db then return 0 end
+    if num(db.rhythmOffset) and not db.rhythmLatency then db.rhythmOffset = db.rhythmOffset - self.LATENCY end
+    db.rhythmLatency = self.LATENCY
+    return num(db.rhythmOffset) and db.rhythmOffset or 0
 end
 
 local function judged(r, n, how, ahead)
@@ -428,7 +441,7 @@ function R:Diag()
     local list = {}
     for _, s in ipairs(self:Ranked()) do list[#list + 1] = s.name .. " [" .. s.key .. "] " .. s.uses end
     print("  spells " .. #list .. ": " .. (#list > 0 and table.concat(list, ", ") or "-"))
-    print("  offset " .. ((OMQ.db and OMQ.db.rhythmOffset) or 0) .. " ms")
+    print("  offset " .. self:Offset() .. " ms (plus " .. self.LATENCY .. " ms built in)")
     local keys = {}
     for k, v in pairs(self.diag) do keys[#keys + 1] = k .. "=" .. v end
     table.sort(keys)
@@ -445,6 +458,7 @@ OMQ:RegisterCommand("rhythm", function(arg)
     elseif ms then
         OMQ.db = OMQ.db or {}
         OMQ.db.rhythmOffset = tonumber(ms)
+        OMQ.db.rhythmLatency = R.LATENCY
         OMQ:Print("rhythm: offset " .. ms .. " ms")
     else R:Diag() end
 end, nil, true)
