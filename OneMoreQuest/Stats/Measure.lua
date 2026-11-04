@@ -1,7 +1,7 @@
 -- One More Quest: Measure
 -- Measures the player's own session statistics (section 3.3, adapted to what
 -- WoW Forever allows, section 13). Values are saved in OMQDB.sessions[guid] so a reload
--- does not lose them. Health numbers are secret on Forever and never used.
+-- does not lose them. Health numbers are secret on Forever and never used (fall damage: decision 396).
 local ADDON, OMQ = ...
 OMQ = _G.OneMoreQuest
 
@@ -278,9 +278,92 @@ end
 -- spell count and the value is marked approximate.
 local landed          -- { at = time of landing, hp0 = health before the fall (or nil) }
 M.fallInfo = { events = 0, readable = 0, secret = 0, byHealth = 0, healthReadable = nil, lastAmount = nil,
-                fallingAt = nil }   -- fallingAt: the last moment I was seen falling (decision 224)
+                fallingAt = nil,    -- fallingAt: the last moment I was seen falling (decision 224)
+                estimated = 0, lastHeight = nil, lastEstimate = nil }   -- decision 396
 
-local function countFall(amount, how)
+----------------------------------------------------------------------
+-- Fall damage from the fall time (decision 396). Where the hit amount and the health are secret
+-- (retail, and maybe Forever), the damage is computed the way the game does it: the height fallen
+-- from the fall time (gravity 19.29 yd/s^2, at most 60 yd/s, a jump starts 7.96 yd/s upwards), then
+-- damage = (0.018 x height - 0.2426) x max health (UnitHealthMax is readable). It only counts when the
+-- game signals a hit or a health change right after the landing (no damage with slow fall).
+----------------------------------------------------------------------
+local GRAVITY, TERMINAL, JUMP_SPEED, SAFE_HEIGHT = 19.29, 60, 7.96, 14.57
+local fallStartAt, fallJumped, lastJumpAt = nil, false, -100
+
+-- yards fallen below the start point after t seconds of falling
+function M.FallHeight(t, jumped)
+    t = tonumber(t) or 0
+    if t <= 0 then return 0 end
+    local v0 = jumped and JUMP_SPEED or 0              -- upwards
+    local tUp = v0 / GRAVITY
+    local rise = v0 * tUp / 2
+    local tDown = t - tUp
+    if tDown <= 0 then return 0 end
+    local tTerm = TERMINAL / GRAVITY
+    local down
+    if tDown <= tTerm then down = GRAVITY * tDown * tDown / 2
+    else down = TERMINAL * tTerm / 2 + TERMINAL * (tDown - tTerm) end
+    return math.max(0, down - rise)
+end
+
+-- the damage of a fall of this height for this max health (0: a safe fall)
+function M.FallDamage(height, maxHp)
+    if not (height and maxHp and height >= SAFE_HEIGHT) then return 0 end
+    local perc = 0.018 * height - 0.2426
+    if perc <= 0 then return 0 end
+    return math.floor(math.min(perc, 0.99) * maxHp + 0.5)
+end
+
+local function onJump() lastJumpAt = GetTime() end
+if hooksecurefunc and _G.JumpOrAscendStart then pcall(hooksecurefunc, "JumpOrAscendStart", onJump) end
+
+-- the game's hit or health event can come in the same frame as the landing, before the addon sees
+-- that I stopped falling: the last one is kept and counts when it came up to 0.3 s before the landing
+local lastHitAt, lastHit = -100, nil
+local HIT_BEFORE = 0.3
+local hpBefore
+local countFall                      -- defined below
+
+-- every frame (decision 396; before, every 0.25 s): fall start, landing, fall time
+local function trackFall()
+    local falling = IsFalling and IsFalling() and true or false
+    if falling then M.fallInfo.fallingAt = GetTime() end
+    if falling and not fallStartAt then
+        fallStartAt = GetTime()
+        fallJumped = GetTime() - lastJumpAt <= 0.3
+        local hp = UnitHealth and UnitHealth("player")
+        hpBefore = isNumber(hp) and hp or nil
+    elseif not falling and fallStartAt then
+        local t = GetTime() - fallStartAt
+        fallStartAt = nil
+        M.fallInfo.lastHeight = M.FallHeight(t, fallJumped)
+        M.fallInfo.lastFallTime = t
+        landed = { at = GetTime(), hp0 = hpBefore, height = M.fallInfo.lastHeight }
+        if GetTime() - lastHitAt <= HIT_BEFORE then
+            landed.sawHit = true
+            local h = lastHit
+            lastHitAt, lastHit = -100, nil
+            if h and GetTime() - h.at > HIT_BEFORE then h = nil end
+            if h and s.fallDmg and not (InCombatLockdown and InCombatLockdown()) then
+                M.fallInfo.events = M.fallInfo.events + 1
+                if isNumber(h.amount) then countFall(h.amount, "readable")
+                else M.fallInfo.secret = M.fallInfo.secret + 1; M.fallInfo.lastAmount = nil end
+            end
+        end
+    end
+end
+M._trackFall = trackFall
+
+-- a health change of mine right after the landing is the sign of fall damage, even when secret
+local healthEvents = CreateFrame("Frame")
+if healthEvents.RegisterUnitEvent then pcall(healthEvents.RegisterUnitEvent, healthEvents, "UNIT_HEALTH", "player") end
+healthEvents:SetScript("OnEvent", function()
+    if landed and GetTime() - landed.at <= 1.0 then landed.sawHit = true
+    elseif not landed then lastHitAt = GetTime() end
+end)
+
+countFall = function(amount, how)
     s.fallDmg = (s.fallDmg or 0) + amount
     M.fallInfo[how] = M.fallInfo[how] + 1
     M.fallInfo.lastAmount = amount
@@ -310,7 +393,11 @@ local function onUnitCombat(unit, action, descriptor, amount)
     if unit == "player" and action ~= "HEAL" then lastHurt = GetTime() end
     if unit == "player" then
         -- first hit right after landing, out of combat: fall damage
-        if action == "WOUND" and landed and s.fallDmg and GetTime() - landed.at <= 1.5
+        if action == "WOUND" and not landed then
+            -- the hit came before the addon saw the landing (decision 396): trackFall counts it
+            lastHitAt, lastHit = GetTime(), { amount = amount, at = GetTime() }
+        end
+        if action == "WOUND" and landed and not landed.counted and s.fallDmg and GetTime() - landed.at <= 1.5
             and not (InCombatLockdown and InCombatLockdown()) then
             M.fallInfo.events = M.fallInfo.events + 1
             if isNumber(amount) then countFall(amount, "readable")
@@ -457,17 +544,8 @@ end
 ----------------------------------------------------------------------
 -- falling state: remember health when the fall starts, note the landing, and when the
 -- hit amount was unreadable use the health lost (only if both values are readable)
-local wasFalling, hpBefore = false, nil
+-- (the fall start and the landing are seen every frame by trackFall, decision 396)
 local function sampleFall()
-    local falling = IsFalling and IsFalling() and true or false
-    if falling then M.fallInfo.fallingAt = GetTime() end
-    if falling and not wasFalling then
-        local hp = UnitHealth and UnitHealth("player")
-        hpBefore = isNumber(hp) and hp or nil
-    elseif wasFalling and not falling then
-        landed = { at = GetTime(), hp0 = hpBefore }
-    end
-    wasFalling = falling
     if landed and GetTime() - landed.at > 1.0 then
         local l = landed
         landed = nil
@@ -481,6 +559,19 @@ local function sampleFall()
                 M.fallInfo.lastAmount = l.hp0 - hp            -- the bets read this one (decision 224)
                 s.fallDmg = s.fallDmg + (l.hp0 - hp)
                 M.fallInfo.byHealth = M.fallInfo.byHealth + 1
+            end
+        end
+        -- no readable amount and no readable health: computed from the fall time (decision 396)
+        if s.fallDmg and l.sawHit and not l.counted and not (l.hp0 and isNumber(UnitHealth and UnitHealth("player")))
+            and not (InCombatLockdown and InCombatLockdown()) and not (UnitIsDeadOrGhost and UnitIsDeadOrGhost("player")) then
+            local maxHp = UnitHealthMax and UnitHealthMax("player")
+            local est = isNumber(maxHp) and M.FallDamage(l.height, maxHp) or 0
+            M.fallInfo.lastEstimate = est
+            if est > 0 then
+                M.fallInfo.events = M.fallInfo.events + 1
+                M.fallInfo.lastAmount = est                   -- the bets read this one
+                M.fallInfo.estimated = M.fallInfo.estimated + 1
+                s.fallDmg = s.fallDmg + est
             end
         end
     elseif landed then
@@ -607,6 +698,7 @@ end)
 local acc = 0
 frame:SetScript("OnUpdate", function(_, elapsed)
     if not s then return end
+    pcall(trackFall)
     acc = acc + elapsed
     if acc < SAMPLE_INTERVAL then return end
     acc = 0
@@ -727,6 +819,8 @@ OMQ:RegisterCommand("falls", function()
     local f = M.fallInfo
     OMQ:Print(string.format("fall damage this session: %s; falls seen %d, amount readable %d, amount secret %d, by health %d, health readable: %s",
         tostring(s and s.fallDmg or "n/a"), f.events, f.readable, f.secret, f.byHealth, tostring(f.healthReadable)))
+    OMQ:Print(string.format("from the fall time: %d; last fall %.2f s, %.1f yd, estimate %s",
+        f.estimated or 0, f.lastFallTime or 0, f.lastHeight or 0, tostring(f.lastEstimate)))
 end, "fall damage counting: what the game lets the addon read")
 
 OMQ:RegisterCommand("dmg", function()

@@ -84,6 +84,9 @@ function BS.MyValue(b)
         return "you: " .. B().Money(b.looted or 0) .. " looted so far"
     elseif b.kind == "fall" then
         if b.fellDead or (b.bestFall or 0) < 0 then return "you: died from a fall (out)" end
+        if b.pendingFall then
+            return string.format("you: %.0f fall damage (counts in a moment if you live)", b.pendingFall.amount)
+        end
         return string.format("you: %.0f fall damage so far", b.bestFall or 0)
     elseif b.kind == "dmg" then
         if b.fightEndAt then return "you: fight over, your damage is sent in a few seconds" end
