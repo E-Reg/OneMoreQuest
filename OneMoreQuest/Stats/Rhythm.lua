@@ -1,4 +1,4 @@
--- One More Quest: Spell Rhythm (from level 30, inside the ledger)
+-- One More Quest: Spell Rhythm (from level 20, inside the ledger)
 -- Pick one of four songs (Media\Track1-4.ogg, note times in Data/Beats.lua). After a countdown the song plays and
 -- spell icons run on a timeline from right to left; the key bound to that spell must be pressed when the icon
 -- crosses the hit zone. Spells come from the own action bars (only those with a keyboard key). While a song runs a
@@ -11,7 +11,7 @@ local R = {}
 OMQ.Rhythm = R
 local L = OMQ.Ledger
 
-R.MIN_LEVEL = 30
+R.MIN_LEVEL = 20
 R.COUNTDOWN = 5
 R.LOOK = 2.0          -- seconds an icon is on the timeline before it reaches the hit zone
 R.PERFECT = 0.08      -- seconds off the beat for "perfect"
@@ -481,7 +481,7 @@ if L then
         L.byId[c.id] = c
     end
     local function rec(b) return b.rhythm or {} end
-    add({ tab = "rhythm", id = "rhythmopen", title = "Dad Beats", text = "Reach level 30: Spell Rhythm is open", icon = "Ability_Warrior_BattleShout", q = 2,
+    add({ tab = "rhythm", id = "rhythmopen", title = "Dad Beats", text = "Reach level 20: Spell Rhythm is open", icon = "Ability_Warrior_BattleShout", q = 2,
           value = function(_, ctx) return ctx and num(ctx.level) and ctx.level >= R.MIN_LEVEL and 1 or 0 end })
     -- the best % of one mode: any song reaches pct, or (all) every song reaches it
     local function best(b, mode, pct, all)

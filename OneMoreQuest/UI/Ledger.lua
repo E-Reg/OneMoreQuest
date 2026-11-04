@@ -404,11 +404,7 @@ end
 function U:ToastCount() return #toastQueue + (toastBusy and 1 or 0) end
 
 OMQ:On("LEDGER_NEW", function(fresh, tabs, first)
-    if first then
-        U:Toast({ head = "A new journey begins", title = "Forever Journey", hold = INTRO_HOLD,
-                  icon = "Interface\\Icons\\INV_Misc_Book_09",
-                  line = "Right-click the minimap icon and open it from the quick options." })
-    end
+    -- the first opening is shown by the unlock card (UI/Unlock.lua), only the cards come as toasts
     local shown = 0
     for _, n in ipairs(fresh or {}) do
         shown = shown + 1

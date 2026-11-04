@@ -243,6 +243,7 @@ function UI:RefreshCreate()
 end
 
 function UI:ToggleCreate()
+    if OMQ.Unlock and not OMQ.Unlock:Has("bets") then OMQ:Print("Bets open at level 5."); return end
     if not create then buildCreate() end
     if create:IsShown() then create:Hide(); return end
     create:Show()

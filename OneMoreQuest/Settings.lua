@@ -111,7 +111,7 @@ end
 
 local function append(dst, src) for _, v in ipairs(src) do dst[#dst + 1] = v end end
 
-function S:Sections()
+local function allSections()
     local alerts = alertItems()
     append(alerts, {
         { type = "button",
@@ -136,7 +136,7 @@ function S:Sections()
               tip = "Hold Alt while hovering an item to see how it compares for every group member.",
               get = function() return OMQ.db.options.compare ~= false end,
               set = function(v) OMQ.db.options.compare = v and true or false end },
-            { type = "check", label = "Show who needs a crafting material",
+            { type = "check", label = "Show who needs a crafting material", unlock = "profession",
               tip = "Tooltip line on green or better materials a group member needs for a recipe.",
               get = function() return OMQ.db.options.needs ~= false end,
               set = function(v) OMQ.db.options.needs = v and true or false end },
@@ -175,7 +175,7 @@ function S:Sections()
                   if OMQ.SelfCastProbe then OMQ.SelfCastProbe.Apply() end
               end },
             -- decisions 334, 335: the threat meter
-            { type = "segment", label = "Threat meter",
+            { type = "segment", label = "Threat meter", unlock = "threat",
               tip = "A small frame with the threat of everyone in your group on your target, in percent (100 = he is the target). In group: whenever you are in a group. Dungeons: only inside a dungeon or raid. Place it in the move mode; /omq threat reset puts it back.",
               options = { "In group", "Dungeons", "Never" },
               get = function()
@@ -250,16 +250,16 @@ function S:Sections()
             { type = "check", label = "Sell grey items automatically", get = qolGet("junk"), set = qolSet("junk"),
               tip = "Also sells what the auction helper found not worth the auction house (under +5%), unless it can be worn." },
             -- decision 259
-            { type = "check", label = "Auction helper at the auction house",
+            { type = "check", label = "Auction helper at the auction house", unlock = "auction",
               tip = "Lists what in your bags brings at least 5% more on the auction house than at the vendor and posts it with one click per auction. Fast mode: one button. Select mode: one row per item. Buy: weapon upgrades and the buff items of your class, stock up with one click per item.",
               get = function() return OMQ.db.options.ahHelper ~= false end,
               set = function(v) OMQ.db.options.ahHelper = v and true or false end },
             -- decision 341: auction prices of everything and the crafting profit
-            { type = "check", label = "Scan all auction prices when the auction house opens",
+            { type = "check", label = "Scan all auction prices when the auction house opens", unlock = "auction",
               tip = "Reads the whole auction house once an hour (it gives way to the auction helper) and keeps the lowest price of every item. The crafting profit uses these prices. /omq prices scan starts a scan by hand.",
               get = function() return OMQ.db.options.priceScan ~= false end,
               set = function(v) OMQ.db.options.priceScan = v and true or false end },
-            { type = "check", label = "Crafting profit in the profession window",
+            { type = "check", label = "Crafting profit in the profession window", unlock = "profession",
               tip = "Shows next to every recipe what it earns on the auction house (product price minus 5% cut minus the materials, from the scanned prices and the vendor prices you have seen) and a block with the numbers under the materials of the selected recipe.",
               get = function() return OMQ.db.options.craftProfit ~= false end,
               set = function(v) OMQ.db.options.craftProfit = v and true or false end },
@@ -285,7 +285,7 @@ function S:Sections()
             { type = "check", label = "Open all mail at the mailbox",
               tip = "When you open a mailbox, money and items of every mail are taken (not cash on delivery). Switched off, only the One More Quest bet mails are opened. Bet mails are always deleted once empty.",
               get = qolGet("openmail"), set = qolSet("openmail") },
-            { type = "check", label = "Close the mailbox after bet mail",
+            { type = "check", label = "Close the mailbox after bet mail", unlock = "bets",
               tip = "After bet earnings are collected or bet debts are paid, the mailbox closes by itself.",
               get = function() return OMQ.db.options.qol.closemail == true end, set = qolSet("closemail") },
         } },
@@ -324,6 +324,22 @@ function S:Sections()
               end },
         } },
     }
+end
+
+-- the options of a feature that is not open yet stay hidden (UI/Unlock.lua)
+function S:Sections()
+    local out = {}
+    for _, sec in ipairs(allSections()) do
+        local items = {}
+        for _, it in ipairs(sec.items) do
+            if not (it.unlock and OMQ.Unlock and not OMQ.Unlock:Has(it.unlock)) then items[#items + 1] = it end
+        end
+        local copy = {}
+        for k, v in pairs(sec) do copy[k] = v end
+        copy.items = items
+        out[#out + 1] = copy
+    end
+    return out
 end
 
 -- tells both option windows to redraw

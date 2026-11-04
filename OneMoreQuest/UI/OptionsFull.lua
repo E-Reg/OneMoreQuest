@@ -540,6 +540,15 @@ end
 
 function F:Hide() if frame then frame:Hide() end end
 
+-- a feature opened (UI/Unlock.lua): its options appear, so the window is drawn anew the next time
+OMQ:On("UNLOCK", function()
+    if not frame then return end
+    local open = frame:IsShown()
+    frame:Hide()
+    frame, widgets = nil, {}
+    if open then F:Show() end
+end)
+
 function F:Toggle()
     if frame and frame:IsShown() then self:Hide() else self:Show() end
 end

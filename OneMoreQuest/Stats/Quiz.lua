@@ -1,4 +1,4 @@
--- One More Quest: flight quiz (from the first flight, inside the ledger)
+-- One More Quest: flight quiz (from the first talk to a flight master, inside the ledger)
 -- On every flight path the player is asked whether to play. Five questions about the own character, drawn from
 -- the counters of Stats/Tally.lua and Stats/Haul.lua; each answer is revealed at once. Only questions with exactly
 -- one right answer are asked, each kind at most once per flight. No answer, or "Not now": nothing is counted.
@@ -480,8 +480,9 @@ end
 function Q:Invite(demo)
     local b = self:Book()
     if not b or self.run then return nil end
+    if not demo and OMQ.Unlock and not OMQ.Unlock:Has("quiz") then note("invite.locked"); return nil end   -- from the first flight master
     local list = self:Draw(b)
-    -- from level 30 the invitation also offers Spell Rhythm, so it comes even without enough questions
+    -- from level 20 the invitation also offers Spell Rhythm, so it comes even without enough questions
     local rhythm = OMQ.Rhythm and OMQ.Rhythm:Unlocked() and not OMQ.Rhythm.run or false
     local short = #list < self.QUESTIONS
     if short and not rhythm then note("invite.short"); return nil end
@@ -506,7 +507,7 @@ function Q:Play()
     note("play")
     OMQ:Fire("QUIZ_CHANGED")
 end
--- the second button of the invitation from level 30: the quiz goes away, Spell Rhythm opens
+-- the second button of the invitation from level 20: the quiz goes away, Spell Rhythm opens
 function Q:Rhythm()
     local r = self.run
     if not r or r.phase ~= "invite" or not r.rhythm then return end

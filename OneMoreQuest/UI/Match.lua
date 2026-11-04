@@ -785,37 +785,6 @@ OMQ:On("MATCH_INVITE", function(inv)
 end)
 
 ----------------------------------------------------------------------
--- Start button in the duels tab of the ledger window
-----------------------------------------------------------------------
-local LU = OMQ.LedgerUI
-if LU and LU.Refresh then
-    local refresh = LU.Refresh
-    LU.Refresh = function(self, ...)
-        refresh(self, ...)
-        local f = self.frame
-        if not f then return end
-        if W.matchFor ~= f then
-            local b = button(f, 130, 26, "Start duel")
-            b:SetPoint("RIGHT", f.flexBtn or f, f.flexBtn and "LEFT" or "TOPRIGHT", -24, f.flexBtn and 0 or -30)
-            b:SetScript("OnClick", function()
-                local fine, why = M:Challenge()
-                if not fine then OMQ:Print("duel: " .. tostring(why)) end
-            end)
-            b:SetScript("OnEnter", function(btn)
-                if not GameTooltip then return end
-                GameTooltip:SetOwner(btn, "ANCHOR_LEFT")
-                GameTooltip:AddLine("Dad Duel")
-                GameTooltip:AddLine("Challenge the dads in your group: 5 rounds with the foes of your journey.", 1, 1, 1, true)
-                GameTooltip:Show()
-            end)
-            b:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
-            W.matchFor, W.matchBtn = f, b
-        end
-        if self.tab == "duels" and M:Unlocked() then W.matchBtn:Show() else W.matchBtn:Hide() end
-    end
-end
-
-----------------------------------------------------------------------
 -- Test command (not in /omq help): demo against simulated dads, start, diagnostics
 ----------------------------------------------------------------------
 OMQ:RegisterCommand("match", function(arg)

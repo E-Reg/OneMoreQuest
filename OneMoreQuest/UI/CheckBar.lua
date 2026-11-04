@@ -22,11 +22,13 @@ local ITEMS = {
       icon = MEDIA .. "Icon_Check" },
     { id = "vote", label = "Group vote (/omq)", tip = "Click: start a vote - One more quest! (the arrow then leads the group to the next quest) or Bed time",
       icon = MEDIA .. "Icon_Vote" },
-    { id = "bet", label = "Bet Check", tip = "Click: start a bet with the dads",          -- decision 170
-      icon = MEDIA .. "Icon_Bet" },
+    { id = "bet", label = "Bet Check", tip = "Click: start a bet with the dads",          -- decision 170, from level 5
+      icon = MEDIA .. "Icon_Bet", show = function() return not OMQ.Unlock or OMQ.Unlock:Has("bets") end },
     { id = "progress", label = "Progress Check", tip = "Click: your milestone timeline, from level 1 to 60",   -- decision 184
       icon = MEDIA .. "Icon_Progress" },
-    { id = "rhythm", label = "Spell Rhythm", tip = "Click: press your spell keys to the beat of a song",   -- decision 381, from level 30
+    { id = "duel", label = "Dad Duel", tip = "Click: challenge the dads in your group - 5 rounds with the foes of your journey",   -- from level 15
+      icon = "Interface\\Icons\\Ability_Warrior_Challange", show = function() return OMQ.Match and OMQ.Match:Unlocked() end },
+    { id = "rhythm", label = "Spell Rhythm", tip = "Click: press your spell keys to the beat of a song",   -- decision 381, from level 20
       icon = MEDIA .. "Icon_Rhythm", show = function() return OMQ.Rhythm and OMQ.Rhythm:Unlocked() end },
 }
 
@@ -35,7 +37,7 @@ local function currentItems()
     local list = {}
     for _, it in ipairs(ITEMS) do if not it.show or it.show() then list[#list + 1] = it end end
     local level = math.max(UnitLevel and UnitLevel("player") or 1, pendingLevel or 0)   -- UnitLevel can lag behind PLAYER_LEVEL_UP
-    if OMQ.DungeonsForLevel then
+    if OMQ.DungeonsForLevel and (not OMQ.Unlock or OMQ.Unlock:Has("dungeon")) then   -- the dungeon checks from level 13
         for _, d in ipairs(OMQ:DungeonsForLevel(level)) do
             list[#list + 1] = { id = "d:" .. d.key, label = d.name, dungeon = d.key, text = d.abbr,
                 tip = "Click: Group Check with the dungeon quests, the entrance and who is how far from it (level " .. d.min .. "-" .. d.max .. ")" }
@@ -82,6 +84,11 @@ local function click(item)
         if OMQ.Vote then OMQ.Vote:Start() end
     elseif item.id == "bet" then
         if OMQ.BetUI then OMQ.BetUI:ToggleCreate() end
+    elseif item.id == "duel" then
+        if OMQ.Match then
+            local fine, why = OMQ.Match:Challenge()
+            if not fine then OMQ:Print("duel: " .. tostring(why)) end
+        end
     elseif item.id == "progress" then
         if OMQ.Milestones then OMQ.Milestones:Toggle() end
     elseif item.id == "rhythm" then
@@ -164,7 +171,7 @@ local function follow(guide, isFlipped)
 end
 
 function CB:IsExpanded() return expanded end
-function CB:Count()                    -- the fixed items available now (Spell Rhythm from level 30)
+function CB:Count()                    -- the fixed items available now (bets from 5, duel from 15, Spell Rhythm from 20)
     local n = 0
     for _, it in ipairs(ITEMS) do if not it.show or it.show() then n = n + 1 end end
     return n
@@ -179,6 +186,8 @@ lvl:SetScript("OnEvent", function(_, e, newLevel)
     if e == "PLAYER_LEVEL_UP" then pendingLevel = tonumber(newLevel) end
     if frame then layout() end
 end)
+
+OMQ:On("UNLOCK", function() if frame then layout() end end)
 
 OMQ:On("READY", function()
     build()

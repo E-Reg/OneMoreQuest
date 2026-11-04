@@ -61,6 +61,7 @@ local function inDungeon()
 end
 
 local function modeAllows()
+    if OMQ.Unlock and not OMQ.Unlock:Has("threat") then return false end   -- off until the first dungeon
     local m = M.Mode()
     if m == "never" then return false end
     if m == "dungeon" then return inDungeon() end

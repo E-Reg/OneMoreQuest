@@ -868,6 +868,7 @@ R._QuestButtons = function() return qbuttons end
 function R:Open(dungeonKey)
     if not frame then build() end
     self.dungeon = (type(dungeonKey) == "string" and OMQ:DungeonByKey(dungeonKey)) and dungeonKey or nil
+    if self.dungeon and OMQ.Unlock and not OMQ.Unlock:Has("dungeon") then self.dungeon = nil end   -- dungeon checks from level 13
     frame:ClearAllPoints()
     frame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
     frame:Show()
@@ -878,6 +879,7 @@ end
 -- the same button closes the window, another one switches it
 function R:Toggle(dungeonKey)
     local key = type(dungeonKey) == "string" and dungeonKey or nil
+    if key and OMQ.Unlock and not OMQ.Unlock:Has("dungeon") then key = nil end
     if frame and frame:IsShown() and self.dungeon == key then frame:Hide() else self:Open(key) end
 end
 

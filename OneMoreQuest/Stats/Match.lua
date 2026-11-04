@@ -1,4 +1,4 @@
--- One More Quest: match between dads (from level 20, inside the ledger)
+-- One More Quest: match between dads (from level 15, started from the check bar)
 -- Every dad brings foes from his own counters (Stats/Tally.lua, kills.npc). Five rounds: each dad picks one
 -- of three random foes in secret, the caller names a value, everybody reveals, the highest value scores
 -- (ties: all of them), the lowest calls the next round. Each value once per match. A tie at the end goes
@@ -12,7 +12,7 @@ local M = {}
 OMQ.Match = M
 local L = OMQ.Ledger
 
-M.MIN_LEVEL = 20
+M.MIN_LEVEL = 15
 M.ROUNDS = 5
 M.MAX_PLAYERS = 5
 M.OFFERS = 3
@@ -202,7 +202,10 @@ local function groupDads()
     local list = {}
     local me = OMQ:GetSelf()
     for guid, u in pairs(OMQ.users or {}) do
-        if (not me or guid ~= me.guid) and OMQ:IsOnline(u) then list[#list + 1] = { guid = guid, name = short(u.name) } end
+        -- a dad below level 15 is not invited (when the game tells his level)
+        if (not me or guid ~= me.guid) and OMQ:IsOnline(u) and (not OMQ.Unlock or OMQ.Unlock:Allows("duel", guid)) then
+            list[#list + 1] = { guid = guid, name = short(u.name) }
+        end
     end
     table.sort(list, function(a, b) return a.name < b.name end)
     return list
@@ -794,8 +797,8 @@ if L then
         L.byId[c.id] = c
     end
     local function rec(b) return b.match or {} end
-    add({ id = "duel20", title = "Ready to Duel", text = "Reach level 20", icon = "Ability_Warrior_Challange", q = 1,
-          value = function(_, ctx) return ctx.level end, need = 20 })
+    add({ id = "duel20", title = "Ready to Duel", text = "Reach level " .. M.MIN_LEVEL, icon = "Ability_Warrior_Challange", q = 1,
+          value = function(_, ctx) return ctx.level end, need = M.MIN_LEVEL })
     add({ id = "duel1", title = "First Challenge", text = "Play your first duel", icon = "INV_Sword_04", q = 2,
           value = function(b) return rec(b).n or 0 end })
     add({ id = "duelwin", title = "Duelist", text = "Win %s duels", icon = "INV_Sword_27", tiers = { 3, 10, 25, 50 },

@@ -25,11 +25,11 @@ FE.SECTIONS = {
     } },
     { "Dungeons", {
         "Group Check before a dungeon: durability, bags, drinks, class items, distance to the entrance",
-        "Dungeon quests of every dad, where each quest starts, with an arrow to the quest giver and the rewards scored for you",
-        "Best boss loot of a dungeon for you, also for the new Forever dungeons",
-        "Threat meter: everybody's threat on your target, in every group or only in dungeons; as the tank you see who pulls the aggro off you",
-        "Arrow to the dungeon entrance, with how to get in",
-        "Switch between the dungeons of your level in the Group Check",
+        { "Dungeon quests of every dad, where each quest starts, with an arrow to the quest giver and the rewards scored for you", unlock = "dungeon" },
+        { "Best boss loot of a dungeon for you, also for the new Forever dungeons", unlock = "dungeon" },
+        { "Threat meter: everybody's threat on your target, in every group or only in dungeons; as the tank you see who pulls the aggro off you", unlock = "threat" },
+        { "Arrow to the dungeon entrance, with how to get in", unlock = "dungeon" },
+        { "Switch between the dungeons of your level in the Group Check", unlock = "dungeon" },
         "Progress Check: the milestones of your class, the dungeons and, on request, the quest zones by level; a click on a zone leads to its quest hub",
     } },
     { "Finding your way", {
@@ -52,13 +52,13 @@ FE.SECTIONS = {
         "Use your elixirs, scrolls, buff food, stones and oils - never, always or in dungeons; a stone or oil goes on the weapon you click",
     } },
     { "Crafting", {
-        "Crafting profit in the profession window: what the materials cost against what the product brings on the auction house, for every recipe",
-        "Cheapest skill-up: two badges mark the cheapest recipe to skill up, by cost and by profit, and every recipe shows its skill-up chance",
-        "Prices of the whole auction house in one scan, plus the vendor prices you have seen; every item tooltip shows the latest price",
-        "Who in the group needs a crafting material, and who carries the materials of a recipe",
+        { "Crafting profit in the profession window: what the materials cost against what the product brings on the auction house, for every recipe", unlock = "profession" },
+        { "Cheapest skill-up: two badges mark the cheapest recipe to skill up, by cost and by profit, and every recipe shows its skill-up chance", unlock = "profession" },
+        { "Prices of the whole auction house in one scan, plus the vendor prices you have seen; every item tooltip shows the latest price", unlock = "auction" },
+        { "Who in the group needs a crafting material, and who carries the materials of a recipe", unlock = "profession" },
     } },
     { "Fun between the dads", {
-        "Bets between the dads, decided automatically, debts paid by mail",
+        { "Bets between the dads, decided automatically, debts paid by mail", unlock = "bets" },
         "\"One more quest?\" vote, with titles for the session at bed time",
     } },
     { "Healing and click casting", {
@@ -67,8 +67,8 @@ FE.SECTIONS = {
     } },
     { "Comfort", {
         "Quests at the NPC: accepted (not the grey ones), finished ones handed in, the best reward marked by item score",
-        "Auction helper: everything worth more on the auction house, posted with one click each - fast or select mode; it starts with a scan of the whole auction house",
-        "Auction helper, buy mode: weapon upgrades, potions, elixirs, stones, oils, scrolls, buff food and armor kits, bags, reagent bags and quivers for your class - stock up or buy single pieces",
+        { "Auction helper: everything worth more on the auction house, posted with one click each - fast or select mode; it starts with a scan of the whole auction house", unlock = "auction" },
+        { "Auction helper, buy mode: weapon upgrades, potions, elixirs, stones, oils, scrolls, buff food and armor kits, bags, reagent bags and quivers for your class - stock up or buy single pieces", unlock = "auction" },
         "Vendor helper: what to sell at the vendor - grey items, gear not worth the auction house or unsold twice, old food and drink, recipes of professions you do not have",
         "Automatic repair, selling of grey items, water and ammo at vendors",
         "Dad UI: the shared interface of the dads with one click, per character; your old UI can be restored",
@@ -78,10 +78,28 @@ FE.SECTIONS = {
         "Guided tour",
     } },
 }
-FE.LIST = {}
-for _, sec in ipairs(FE.SECTIONS) do
-    for _, t in ipairs(sec[2]) do FE.LIST[#FE.LIST + 1] = t end
+-- an entry is a text, or { text, unlock = id }: a feature that is not open yet is left out (UI/Unlock.lua)
+local function visible()
+    local out = {}
+    for _, sec in ipairs(FE.SECTIONS) do
+        local list = {}
+        for _, e in ipairs(sec[2]) do
+            if type(e) == "string" then list[#list + 1] = e
+            elseif not (e.unlock and OMQ.Unlock and not OMQ.Unlock:Has(e.unlock)) then list[#list + 1] = e[1] end
+        end
+        if #list > 0 then out[#out + 1] = { sec[1], list } end
+    end
+    return out
 end
+FE.Visible = visible
+FE.LIST = {}
+local function listNow()
+    FE.LIST = {}
+    for _, sec in ipairs(visible()) do
+        for _, t in ipairs(sec[2]) do FE.LIST[#FE.LIST + 1] = t end
+    end
+end
+listNow()
 
 local GOLD = { 0.89, 0.71, 0.29 }
 local frame
@@ -123,7 +141,8 @@ local function build()
     local W = 500
     frame.heads, frame.bodies = {}, {}
     local prev
-    for i, sec in ipairs(FE.SECTIONS) do
+    listNow()
+    for i, sec in ipairs(visible()) do
         local h = content:CreateFontString(nil, "OVERLAY", "GameFontNormal")
         if prev then h:SetPoint("TOPLEFT", prev, "BOTTOMLEFT", -10, -18) else h:SetPoint("TOPLEFT", content, "TOPLEFT", 0, 0) end
         h:SetText(sec[1])
@@ -147,7 +166,7 @@ local function build()
         prev = body
     end
     -- the scroll height: measured once the window is on screen (an estimate until then)
-    content:SetHeight(#FE.LIST * 34 + #FE.SECTIONS * 40)
+    content:SetHeight(#FE.LIST * 34 + #frame.heads * 40)
     frame:SetScript("OnShow", function()
         local top, bottom = content:GetTop(), prev:GetBottom()
         top, bottom = tonumber((top)), tonumber((bottom))
@@ -162,5 +181,15 @@ function FE:Toggle()
     if frame and frame:IsShown() then frame:Hide() else FE:Show() end
 end
 function FE:Frame() return frame end
+
+-- a feature opened: the list is drawn anew the next time
+OMQ:On("UNLOCK", function()
+    if not frame then listNow(); return end
+    local open = frame:IsShown()
+    frame:Hide()
+    frame = nil
+    listNow()
+    if open then FE:Show() end
+end)
 
 OMQ:RegisterCommand("features", function() FE:Toggle() end, "list everything the addon does")

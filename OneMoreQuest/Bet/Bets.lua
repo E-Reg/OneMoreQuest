@@ -146,7 +146,8 @@ function B.Dads()
     if m then list[1] = { guid = m.guid, name = m.name, class = m.class, isSelf = true } end
     local others = {}
     for guid, u in pairs(OMQ.users or {}) do
-        if (not m or guid ~= m.guid) and OMQ:IsOnline(u) then
+        -- a dad below level 5 takes no part in bets (when the game tells his level)
+        if (not m or guid ~= m.guid) and OMQ:IsOnline(u) and (not OMQ.Unlock or OMQ.Unlock:Allows("bets", guid)) then
             others[#others + 1] = { guid = guid, name = u.name, class = u.class, pos = OMQ:GroupPosition(guid) or 9 }
         end
     end
@@ -633,6 +634,7 @@ OMQ:RegisterMessage("BS", function(f)
     if not (id and starter and stake) or (m and starter == m.guid) then return end
     local u = OMQ.users and OMQ.users[starter]
     if not (u and OMQ:IsOnline(u)) then return end
+    if OMQ.Unlock and not OMQ.Unlock:Has("bets") then return end      -- below level 5: no bets
     B:OnStart(id, starter, kind, stake, f[5] or "")
 end)
 

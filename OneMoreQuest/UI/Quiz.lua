@@ -124,7 +124,7 @@ function W:Build()
     f.play:SetScript("OnClick", function() Q:Play() end)
     f.notNow = button(f.inv, 130, 36, "Not now"); f.notNow:SetPoint("TOPLEFT", f.inv, "TOP", 6, -106)
     f.notNow:SetScript("OnClick", function() Q:Decline() end)
-    -- from level 30: Quiz and Rhythm side by side, Not now below
+    -- from level 20: Quiz and Rhythm side by side, Not now below
     f.rhythm = button(f.inv, 130, 36, "Rhythm", true); f.rhythm:SetPoint("TOPLEFT", f.inv, "TOP", 6, -106)
     f.rhythm:SetScript("OnClick", function() Q:Rhythm() end)
 
