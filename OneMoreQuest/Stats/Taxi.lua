@@ -1,6 +1,6 @@
 -- One More Quest: flight times
 -- Measures every flight path (from the node you start at to the node you picked) and keeps the time account-wide
--- in OMQDB.taxi. A route never flown yet gets an estimate from the length of its hops on the taxi map, at the speed
+-- in OMQDB.taxi. A route never flown yet takes its known time from OMQ.taxiTimes (Data/TaxiTimes.lua), else an estimate from the length of its hops on the taxi map, at the speed
 -- learned from the measured flights (marked with "~"). Measured times are shared with the dads in the group
 -- (message TT: "from-to:seconds" pairs); a time of my own always wins over a shared one.
 local ADDON, OMQ = ...
@@ -95,6 +95,8 @@ end
 function X:Time(from, to, yd)
     local r = (self:Store() or {})[key(from, to)]
     if r and num(r.s) then return r.s, false end
+    local known = OMQ.taxiTimes and OMQ.taxiTimes[key(from, to)]
+    if num(known) then return known, false end
     if num(yd) then return math.floor(yd * self:Rate() + 0.5), true end
     return nil
 end
@@ -238,7 +240,9 @@ OMQ:RegisterCommand("taxi", function()
     local store = X:Store() or {}
     local mine, shared = 0, 0
     for _, r in pairs(store) do if r.me then mine = mine + 1 else shared = shared + 1 end end
-    OMQ:Print(string.format("taxi: %d routes measured, %d from dads, %.3f s/yd", mine, shared, X:Rate()))
+    local known = 0
+    for _ in pairs(OMQ.taxiTimes or {}) do known = known + 1 end
+    OMQ:Print(string.format("taxi: %d routes measured, %d from dads, %d known, %.3f s/yd", mine, shared, known, X:Rate()))
     local f = X.flight
     if f then print("  flying " .. tostring(f.from) .. " -> " .. tostring(f.to) .. " " .. tostring(f.name) .. ", " .. tostring(f.secs) .. (f.est and " (estimate)" or "")) end
     local keys = {}
