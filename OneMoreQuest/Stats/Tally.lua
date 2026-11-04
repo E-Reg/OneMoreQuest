@@ -545,6 +545,8 @@ local ENV = { "lava", "falld", "drownd" }
 local ENV_WHY = { lava = "lava", falld = "fall", drownd = "drown" }
 local envBase = {}
 local function statValue(key)
+    -- "--" (no such death yet) counts as 0, so the first lava or drowning death is seen (decision 401)
+    if OMQ.Lifetime and OMQ.Lifetime.StatCount then return OMQ.Lifetime:StatCount(key) end
     local ids = OMQ.Lifetime and OMQ.Lifetime.StatIds and OMQ.Lifetime:StatIds()
     local id = ids and ids[key]
     if not id or not GetStatistic then return nil end

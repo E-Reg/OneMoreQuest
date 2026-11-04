@@ -244,6 +244,22 @@ local function fromStatistics()
     return v
 end
 
+-- a death counter of the statistics tab as a number: the game shows "--" until the first such death,
+-- that is 0 here (decision 401: the first drowning or lava death of a character was never counted,
+-- because "--" was no data and the next read "1" became the start value). nil: no such statistic.
+local COUNTERS = { falld = true, drownd = true, lava = true }
+function L:StatCount(key)
+    loadCachedIds()
+    local id = statIds[key]
+    if not id then return nil end
+    local ok, val = pcall(GetStatistic, id)
+    if not ok then return nil end
+    local n = parseNumber(val)
+    if n then return n end
+    if COUNTERS[key] and (val == nil or (type(val) == "string" and val:match("^[%s%-]*$"))) then return 0 end
+    return nil
+end
+
 function L:RescanStatistics() scanNow() end
 function L:ScanInBackground(force) scanStatistics(force) end
 function L:IsScanning() return scanJob ~= nil end

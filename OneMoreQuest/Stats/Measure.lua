@@ -16,6 +16,14 @@ OMQ.Measure = M
 
 local s                              -- shorthand for this character's session
 
+-- a counter of the game's statistics tab; the death counters read "--" as 0 (decision 401)
+local function statNow(stats, k)
+    if stats[k] ~= nil then return stats[k] end
+    if OMQ.Lifetime and OMQ.Lifetime.StatCount and (k == "falld" or k == "drownd" or k == "lava") then
+        return OMQ.Lifetime:StatCount(k)
+    end
+end
+
 ----------------------------------------------------------------------
 -- Session handling
 ----------------------------------------------------------------------
@@ -89,7 +97,8 @@ function M:ResetSession()
     -- the game's own counters start from what they say right now
     local stats = OMQ.Lifetime and OMQ.Lifetime.GetStatValues and OMQ.Lifetime:GetStatValues() or {}
     for _, k in ipairs({ "falld", "drownd", "lava", "aucp", "aucb", "need", "greed" }) do
-        if type(stats[k]) == "number" then s.statBase[k] = stats[k] end
+        local cur = statNow(stats, k)
+        if type(cur) == "number" then s.statBase[k] = cur end
     end
     self:SnapshotXP()
     OMQ:Fire("SESSION_RESET")
@@ -149,7 +158,7 @@ function M:GetValues()
     local stats = OMQ.Lifetime and OMQ.Lifetime.GetStatValues and OMQ.Lifetime:GetStatValues() or {}
     s.statBase = s.statBase or {}
     for _, k in ipairs({ "falld", "drownd", "lava", "aucp", "aucb", "need", "greed" }) do
-        local cur = stats[k]
+        local cur = statNow(stats, k)
         if type(cur) == "number" then
             if s.statBase[k] == nil then s.statBase[k] = cur end
             v[k] = math.max(0, cur - s.statBase[k])
