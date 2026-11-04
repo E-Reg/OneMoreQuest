@@ -128,24 +128,35 @@ local function parseNumber(v)
     if digits:match("^%d+$") then return tonumber(digits) end
 end
 
+-- The scan walks every entry of the statistics tab. On retail that is well over a thousand
+-- entries and took one to two seconds in one go: the game stood still at the first hover over
+-- the minimap icon (decision 374). Now the scan runs in the background a few milliseconds per
+-- frame, the ids found are kept per client language, and readers only use what is known.
+local SCAN_BUDGET_MS = 3      -- per frame
+local SCAN_BUDGET_N = 40      -- per frame without a timer
 local statIds, statScanAt = {}, -math.huge
-local function scanStatistics()
-    if not (GetStatisticsCategoryList and GetCategoryNumAchievements and GetAchievementInfo and GetStatistic) then return end
-    if GetTime() - statScanAt < STAT_SCAN_EVERY then return end
-    statScanAt = GetTime()
-    local ok, cats = pcall(GetStatisticsCategoryList)
-    if not ok or type(cats) ~= "table" then return end
-    local found = {}
-    for _, cat in ipairs(cats) do
-        local okn, num = pcall(GetCategoryNumAchievements, cat)
-        for i = 1, (okn and num) or 0 do
-            local oka, id, name = pcall(GetAchievementInfo, cat, i)
-            if oka and id and type(name) == "string" then
-                local key = classify(name)
-                if key and not found[key] then found[key] = id end
-            end
-        end
+local scanJob, scanFrame
+
+local function statApi()
+    return GetStatisticsCategoryList and GetCategoryNumAchievements and GetAchievementInfo and GetStatistic
+end
+
+local function cacheKey()
+    local build
+    if GetBuildInfo then build = select(4, GetBuildInfo()) end
+    return (GetLocale and GetLocale() or "?") .. "|" .. tostring(build or "?")
+end
+
+-- one category entry: name -> key; the first id per key wins
+local function classifyEntry(found, cat, i)
+    local oka, id, name = pcall(GetAchievementInfo, cat, i)
+    if oka and id and type(name) == "string" then
+        local key = classify(name)
+        if key and not found[key] then found[key] = id end
     end
+end
+
+local function finishScan(found)
     -- the auction rows have fixed ids in the statistics tab (329 posted, 330 bought)
     for key, id in pairs({ aucp = 329, aucb = 330 }) do
         if not found[key] then
@@ -154,6 +165,74 @@ local function scanStatistics()
         end
     end
     statIds = found
+    if OMQDB then OMQDB.statIds = { key = cacheKey(), ids = found } end
+    if OMQ.Fire then OMQ:Fire("STATISTICS_SCANNED") end
+end
+
+-- the whole tab in one go (/omq lifetime scan and the tests)
+local function scanNow()
+    if not statApi() then return end
+    statScanAt = GetTime()
+    scanJob = nil
+    local ok, cats = pcall(GetStatisticsCategoryList)
+    if not ok or type(cats) ~= "table" then return end
+    local found = {}
+    for _, cat in ipairs(cats) do
+        local okn, num = pcall(GetCategoryNumAchievements, cat)
+        for i = 1, (okn and num) or 0 do classifyEntry(found, cat, i) end
+    end
+    finishScan(found)
+end
+
+local function scanStep()
+    local job = scanJob
+    if not job then if scanFrame then scanFrame:SetScript("OnUpdate", nil) end; return end
+    local clock = debugprofilestop
+    local t0 = clock and clock()
+    local n = 0
+    while true do
+        local cat = job.cats[job.c]
+        if not cat then
+            scanJob = nil
+            scanFrame:SetScript("OnUpdate", nil)
+            finishScan(job.found)
+            return
+        end
+        if not job.num then
+            local okn, num = pcall(GetCategoryNumAchievements, cat)
+            job.num, job.i = (okn and num) or 0, 1
+        end
+        if job.i > job.num then
+            job.c, job.num = job.c + 1, nil
+        else
+            classifyEntry(job.found, cat, job.i)
+            job.i = job.i + 1
+        end
+        n = n + 1
+        if t0 then
+            if n % 10 == 0 and clock() - t0 >= SCAN_BUDGET_MS then return end
+        elseif n >= SCAN_BUDGET_N then return end
+    end
+end
+
+-- starts a background scan when the last one is old enough (or force)
+local function scanStatistics(force)
+    if scanJob or not statApi() then return end
+    if not force and GetTime() - statScanAt < STAT_SCAN_EVERY then return end
+    statScanAt = GetTime()
+    local ok, cats = pcall(GetStatisticsCategoryList)
+    if not ok or type(cats) ~= "table" then return end
+    scanJob = { cats = cats, c = 1, found = {} }
+    scanFrame = scanFrame or CreateFrame("Frame")
+    scanFrame:SetScript("OnUpdate", scanStep)
+end
+
+-- ids from the last login with the same client: usable at once, before any scan
+local function loadCachedIds()
+    local c = OMQDB and OMQDB.statIds
+    if type(c) == "table" and c.key == cacheKey() and type(c.ids) == "table" and next(statIds) == nil then
+        statIds = c.ids
+    end
 end
 
 local function fromStatistics()
@@ -165,16 +244,20 @@ local function fromStatistics()
     return v
 end
 
-function L:RescanStatistics() statScanAt = -math.huge; scanStatistics() end
+function L:RescanStatistics() scanNow() end
+function L:ScanInBackground(force) scanStatistics(force) end
+function L:IsScanning() return scanJob ~= nil end
 function L:StatIds() return statIds end
 
 -- the game's own counters (deaths, auctions ...), nil where the client has none
 function L:GetStatValues()
+    loadCachedIds()
     scanStatistics()
     return fromStatistics()
 end
 
 function L:GetValues()
+    loadCachedIds()
     scanStatistics()
     local v = fromSessions()
     -- without the game's own counters the saved sessions have to do
@@ -341,6 +424,8 @@ function L:GetPeople()
 end
 
 OMQ:On("READY", function()
+    loadCachedIds()
+    scanStatistics(true)          -- in the background, long before the first hover
     C_Timer.NewTicker(SEND_INTERVAL, function() pcall(L.Send, L) end)
     C_Timer.NewTicker(TOGETHER_TICK, function() pcall(togetherTick) end)
 end)

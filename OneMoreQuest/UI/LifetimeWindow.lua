@@ -203,7 +203,7 @@ end
 
 function W:Show()
     if not frame then build() end
-    OMQ.Lifetime:RescanStatistics()
+    OMQ.Lifetime:ScanInBackground()     -- no freeze on open (decision 374), redrawn when done
     self:Render()
     frame:Show()
 end
@@ -215,3 +215,7 @@ function W:Toggle()
 end
 
 OMQ:On("MINIMAP_LEFT_CLICK", function() W:Toggle() end)
+
+OMQ:On("STATISTICS_SCANNED", function()
+    if frame and frame:IsShown() then W:Render() end
+end)
