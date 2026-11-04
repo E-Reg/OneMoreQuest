@@ -124,6 +124,9 @@ function W:Build()
     f.play:SetScript("OnClick", function() Q:Play() end)
     f.notNow = button(f.inv, 130, 36, "Not now"); f.notNow:SetPoint("TOPLEFT", f.inv, "TOP", 6, -106)
     f.notNow:SetScript("OnClick", function() Q:Decline() end)
+    -- from level 30: Quiz and Rhythm side by side, Not now below
+    f.rhythm = button(f.inv, 130, 36, "Rhythm", true); f.rhythm:SetPoint("TOPLEFT", f.inv, "TOP", 6, -106)
+    f.rhythm:SetScript("OnClick", function() Q:Rhythm() end)
 
     -- question
     f.qp = CreateFrame("Frame", nil, f); f.qp:SetAllPoints()
@@ -201,9 +204,22 @@ function W:Refresh()
     if run.phase == "invite" then
         f:SetSize(SMALL, 160)
         f.title:ClearAllPoints(); f.title:SetPoint("TOP", 0, -72)
-        f.title:SetText("Flight Quiz")
+        f.title:SetText(run.rhythm and "Flight Games" or "Flight Quiz")
         f.inv:Show()
         f.notNow.label:SetText("Not now (" .. math.max(0, math.ceil(Q.INVITE_TIME - (GetTime() - run.at))) .. ")")
+        f.play.label:SetText(run.rhythm and "Quiz" or "Play")
+        if run.short then f.play:Hide() else f.play:Show() end
+        if run.rhythm then f.rhythm:Show() else f.rhythm:Hide() end
+        f.play:ClearAllPoints(); f.rhythm:ClearAllPoints(); f.notNow:ClearAllPoints()
+        if run.rhythm then
+            f:SetSize(SMALL, 200)
+            if run.short then f.rhythm:SetPoint("TOP", f.inv, "TOP", 0, -106)
+            else f.play:SetPoint("TOPRIGHT", f.inv, "TOP", -6, -106); f.rhythm:SetPoint("TOPLEFT", f.inv, "TOP", 6, -106) end
+            f.notNow:SetPoint("TOP", f.inv, "TOP", 0, -150)
+        else
+            f.play:SetPoint("TOPRIGHT", f.inv, "TOP", -6, -106)
+            f.notNow:SetPoint("TOPLEFT", f.inv, "TOP", 6, -106)
+        end
         for _, d in ipairs(f.dots) do d:Hide() end
     elseif run.phase == "question" or run.phase == "answered" then
         local q = Q:Current()

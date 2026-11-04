@@ -481,10 +481,13 @@ function Q:Invite(demo)
     local b = self:Book()
     if not b or self.run then return nil end
     local list = self:Draw(b)
-    if #list < self.QUESTIONS then note("invite.short"); return nil end
+    -- from level 30 the invitation also offers Spell Rhythm, so it comes even without enough questions
+    local rhythm = OMQ.Rhythm and OMQ.Rhythm:Unlocked() and not OMQ.Rhythm.run or false
+    local short = #list < self.QUESTIONS
+    if short and not rhythm then note("invite.short"); return nil end
     local rec = self:Record()
     rec.asked = rec.asked + 1
-    self.run = { phase = "invite", list = list, i = 0, right = 0, answered = 0, demo = demo, at = GetTime() }
+    self.run = { phase = "invite", list = list, i = 0, right = 0, answered = 0, demo = demo, at = GetTime(), rhythm = rhythm, short = short }
     note("invite")
     OMQ:Fire("QUIZ_CHANGED")
     return self.run
@@ -497,11 +500,20 @@ function Q:Decline()
 end
 function Q:Play()
     local r = self.run
-    if not r or r.phase ~= "invite" then return end
+    if not r or r.phase ~= "invite" or r.short then return end
     self:Record().played = self:Record().played + 1
     r.i, r.phase = 1, "question"
     note("play")
     OMQ:Fire("QUIZ_CHANGED")
+end
+-- the second button of the invitation from level 30: the quiz goes away, Spell Rhythm opens
+function Q:Rhythm()
+    local r = self.run
+    if not r or r.phase ~= "invite" or not r.rhythm then return end
+    note("rhythm")
+    self.run = nil
+    OMQ:Fire("QUIZ_CHANGED")
+    OMQ.Rhythm:Open("flight")
 end
 function Q:Current() local r = self.run; return r and r.list[r.i] or nil end
 function Q:Answer(choice)

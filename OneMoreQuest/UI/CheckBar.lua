@@ -26,12 +26,14 @@ local ITEMS = {
       icon = MEDIA .. "Icon_Bet" },
     { id = "progress", label = "Progress Check", tip = "Click: your milestone timeline, from level 1 to 60",   -- decision 184
       icon = MEDIA .. "Icon_Progress" },
+    { id = "rhythm", label = "Spell Rhythm", tip = "Click: press your spell keys to the beat of a song",   -- decision 381, from level 30
+      icon = MEDIA .. "Icon_Rhythm", show = function() return OMQ.Rhythm and OMQ.Rhythm:Unlocked() end },
 }
 
 local pendingLevel
 local function currentItems()
     local list = {}
-    for _, it in ipairs(ITEMS) do list[#list + 1] = it end
+    for _, it in ipairs(ITEMS) do if not it.show or it.show() then list[#list + 1] = it end end
     local level = math.max(UnitLevel and UnitLevel("player") or 1, pendingLevel or 0)   -- UnitLevel can lag behind PLAYER_LEVEL_UP
     if OMQ.DungeonsForLevel then
         for _, d in ipairs(OMQ:DungeonsForLevel(level)) do
@@ -82,6 +84,11 @@ local function click(item)
         if OMQ.BetUI then OMQ.BetUI:ToggleCreate() end
     elseif item.id == "progress" then
         if OMQ.Milestones then OMQ.Milestones:Toggle() end
+    elseif item.id == "rhythm" then
+        if OMQ.Rhythm then
+            local _, why = OMQ.Rhythm:Open("bar")
+            if why == "combat" then OMQ:Print("Spell Rhythm: not in combat.") end
+        end
     end
     suppressed = true
     expanded = false
@@ -157,7 +164,11 @@ local function follow(guide, isFlipped)
 end
 
 function CB:IsExpanded() return expanded end
-function CB:Count() return #ITEMS end
+function CB:Count()                    -- the fixed items available now (Spell Rhythm from level 30)
+    local n = 0
+    for _, it in ipairs(ITEMS) do if not it.show or it.show() then n = n + 1 end end
+    return n
+end
 function CB:Items() return items end
 function CB:Refresh() layout() end
 function CB:Button(id) return buttons[id] end

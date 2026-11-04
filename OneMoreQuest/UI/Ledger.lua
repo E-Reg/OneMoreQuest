@@ -7,6 +7,7 @@ OMQ = _G.OneMoreQuest
 
 local U = {}
 OMQ.LedgerUI = U
+U.TAB_MIN = 110    -- narrowest tab column
 local L = OMQ.Ledger
 
 local COLS, ROWS = 5, 2
@@ -575,10 +576,22 @@ end
 
 local function build()
     local W = COLS * CW + (COLS - 1) * GAP + 2 * PAD
-    local H = 64 + 14 + ROWS * CH + (ROWS - 1) * GAP + 40 + 34
+    local H = 64 + 14 + ROWS * CH + (ROWS - 1) * GAP + 40
     local f = CreateFrame("Frame", "OneMoreQuestBook", UIParent)
     U.frame = f
-    f:SetSize(W, H)
+    -- the tabs stand in a column on the right, as wide as the longest name needs; the card view keeps its size
+    local probe = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    local longest = 0
+    for _, t in ipairs(L.TABS) do
+        probe:SetText(t.name)
+        local w = probe.GetStringWidth and probe:GetStringWidth()
+        if type(w) ~= "number" or w <= 0 then w = #t.name * 7 end
+        if w > longest then longest = w end
+    end
+    probe:SetText(""); probe:Hide()
+    local TW = math.max(U.TAB_MIN, math.ceil(longest) + 28)
+    U.tabWidth = TW
+    f:SetSize(W + TW + 8, H)
     f:SetPoint("CENTER")
     f:SetFrameStrata("DIALOG")
     f:SetClampedToScreen(true)
@@ -652,25 +665,27 @@ local function build()
 
     local pagerY = 64 + 14 + ROWS * CH + (ROWS - 1) * GAP + 8
     f.prev = CreateFrame("Button", nil, f)
-    f.prev:SetSize(40, 24); f.prev:SetPoint("TOP", f, "TOP", -80, -pagerY)
+    f.prev:SetSize(40, 24); f.prev:SetPoint("TOP", f, "TOPLEFT", W / 2 - 80, -pagerY)
     f.prev.label = f.prev:CreateFontString(nil, "OVERLAY", "GameFontNormal"); f.prev.label:SetPoint("CENTER"); f.prev.label:SetText("<")
     f.prev:SetScript("OnClick", function() U.page = math.max(1, U.page - 1); U:Refresh() end)
     f.next = CreateFrame("Button", nil, f)
-    f.next:SetSize(40, 24); f.next:SetPoint("TOP", f, "TOP", 80, -pagerY)
+    f.next:SetSize(40, 24); f.next:SetPoint("TOP", f, "TOPLEFT", W / 2 + 80, -pagerY)
     f.next.label = f.next:CreateFontString(nil, "OVERLAY", "GameFontNormal"); f.next.label:SetPoint("CENTER"); f.next.label:SetText(">")
     f.next:SetScript("OnClick", function() U.page = U.page + 1; U:Refresh() end)
     f.pageText = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    f.pageText:SetPoint("TOP", f, "TOP", 0, -(pagerY + 6))
+    f.pageText:SetPoint("TOP", f, "TOPLEFT", W / 2, -(pagerY + 6))
 
     f.tabs = {}
-    local tw = math.floor((W - 16) / #L.TABS)
+    f.tabLine = tex(f, "BORDER", .54, .43, .18, 1)
+    f.tabLine:SetPoint("TOPLEFT", W, -64); f.tabLine:SetPoint("BOTTOMLEFT", W, 0); f.tabLine:SetWidth(1)
+    local step = math.min(30, math.floor((H - 64 - 14 - 8) / #L.TABS))
     for i, t in ipairs(L.TABS) do
         local b = CreateFrame("Button", nil, f)
-        b:SetSize(tw - 2, 30)
-        b:SetPoint("BOTTOMLEFT", 8 + (i - 1) * tw, 4)
+        b:SetSize(TW, step - 2)
+        b:SetPoint("TOPLEFT", W + 4, -(64 + 14 + (i - 1) * step))
         b.bg = tex(b, "BACKGROUND", .07, .05, .03, 1); b.bg:SetAllPoints()
         b.label = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        b.label:SetPoint("CENTER")
+        b.label:SetPoint("LEFT", 12, 0)
         b.id = t.id
         b:SetScript("OnClick", function(self)
             if not L:TabOpen(self.id) then return end
