@@ -160,7 +160,7 @@ local function allSections()
               end },
             -- decision 226: Shift-click heals in the game's click casting (healing classes)
             { type = "check", label = "Shift-click heals on unit frames",
-              tip = "Healers only (priest, paladin, druid, shaman): Shift + left click on a party, player or target frame casts the emergency heal, Shift + right click the comfortable heal, always the best one you know. Bindings you made yourself are never changed.",
+              tip = "Healers only (priest, paladin, druid, shaman): Shift + left click on a party, player or target frame casts the emergency heal, Shift + right click the comfortable heal, always the best one you know. Bindings you made yourself are never changed, they only move up when you learn a new rank of their spell (a lower rank you picked on purpose stays).",
               get = function() return OMQ.db.options.clickHeals ~= false end,
               set = function(v)
                   OMQ.db.options.clickHeals = v and true or false

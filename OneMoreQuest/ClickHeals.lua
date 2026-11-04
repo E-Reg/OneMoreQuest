@@ -6,7 +6,8 @@
 -- rank is its own spell id). So the addon binds the highest learned rank and sets the binding again
 -- on every rank up. It picks the best spell the character knows and moves the binding along when a
 -- better spell or a higher rank is learned.
--- Rules: existing bindings are never overwritten, only the addon's own. A binding of ours
+-- Rules: existing bindings are never overwritten, only the addon's own. One exception (decision 393):
+-- a spell binding of the dad on the highest rank moves along to a newly learned rank. A binding of ours
 -- the dad removed or changed by hand stays his; we do not put it back. Only out of combat
 -- (SetProfileByInfo is restricted), never while the game's click casting window is open.
 -- Modifiers: the game stores Shift as 3 (left and right shift, seen with /omq clicks).
@@ -74,35 +75,71 @@ function CH.Wanted(button)
     return best and CH.TopRank(best)
 end
 
--- the highest learned rank of a spell, by name in the spell book; the id itself when the book
--- cannot be read or the spell has no ranks
-function CH.TopRank(id)
-    local name = spellName(id)
+-- the highest learned rank of every ranked spell in the spell book: { [name] = { id =, rank = } },
+-- nil when the book cannot be read
+function CH.Tops()
     local SB = C_SpellBook
-    if not (name and SB and SB.GetNumSpellBookSkillLines and SB.GetSpellBookSkillLineInfo and SB.GetSpellBookItemInfo) then
-        return id
+    if not (SB and SB.GetNumSpellBookSkillLines and SB.GetSpellBookSkillLineInfo and SB.GetSpellBookItemInfo) then
+        return nil
     end
     local bank = Enum and Enum.SpellBookSpellBank and Enum.SpellBookSpellBank.Player or 0
     local spellType = Enum and Enum.SpellBookItemType and Enum.SpellBookItemType.Spell
-    local best, bestRank = id, -1
+    local tops = {}
     for line = 1, SB.GetNumSpellBookSkillLines() or 0 do
         local info = SB.GetSpellBookSkillLineInfo(line)
         if info then
             for i = 1, info.numSpellBookItems or 0 do
                 local item = SB.GetSpellBookItemInfo((info.itemIndexOffset or 0) + i, bank)
                 if item and item.spellID and (spellType == nil or item.itemType == spellType) and not item.isPassive
-                    and not item.isOffSpec and (item.name or spellName(item.spellID)) == name then
+                    and not item.isOffSpec and knows(item.spellID) then
+                    local name = item.name or spellName(item.spellID)
                     local sub = item.subName
                     if (sub == nil or sub == "") and C_Spell and C_Spell.GetSpellSubtext then
                         sub = C_Spell.GetSpellSubtext(item.spellID)
                     end
-                    local rank = type(sub) == "string" and tonumber(sub:match("%d+")) or 0
-                    if rank > bestRank and knows(item.spellID) then best, bestRank = item.spellID, rank end
+                    local rank = type(sub) == "string" and tonumber(sub:match("%d+"))
+                    if name and rank and (not tops[name] or rank > tops[name].rank) then
+                        tops[name] = { id = item.spellID, rank = rank }
+                    end
                 end
             end
         end
     end
-    return best
+    return tops
+end
+
+-- the highest learned rank of a spell; the id itself when the book cannot be read or the spell has no ranks
+function CH.TopRank(id, tops)
+    tops = tops or CH.Tops()
+    local name = spellName(id)
+    local t = tops and name and tops[name]
+    return t and t.id or id
+end
+
+-- decision 393: the dad's own spell bindings follow a new rank too, but only when they held the
+-- highest rank before it (a binding on a lower rank was chosen on purpose, downranking: it stays).
+-- old: { [name] = id } the highest ranks at the last check (saved per character); now: CH.Tops().
+-- Changes profile in place (pure, for the tests), returns how many bindings moved.
+-- Without old (first run) nothing moves: we cannot know what the highest rank was.
+function CH.Follow(profile, old, now)
+    if not (old and now) then return 0 end
+    local moved = 0
+    for _, info in ipairs(profile) do
+        if info.type == SPELL and info.actionID then
+            local name = spellName(info.actionID)
+            local t = name and now[name]
+            if t and old[name] == info.actionID and t.id ~= info.actionID then
+                info.actionID = t.id; moved = moved + 1
+            end
+        end
+    end
+    return moved
+end
+
+local function topIds(now)
+    local o = {}
+    for name, t in pairs(now) do o[name] = t.id end
+    return o
 end
 
 local function isShift(m) return m == 1 or m == 2 or m == 3 end
@@ -158,8 +195,21 @@ function CH.Update()
     if not st then return end
     local ok, profile = pcall(CB.GetProfileInfo)
     if not ok or type(profile) ~= "table" then return end
-    local new, notes = CH.Plan(profile, st, CH.Wanted, enabled())
-    if not new then return end
+    local on = enabled()
+    local new, notes = CH.Plan(profile, st, CH.Wanted, on)
+    local now = on and CH.Tops() or nil
+    if now then
+        local base = new
+        if not base then
+            base = {}
+            for i, e in ipairs(profile) do base[i] = { type = e.type, actionID = e.actionID, button = e.button, modifiers = e.modifiers } end
+        end
+        if CH.Follow(base, st.tops, now) > 0 then new = base end
+    end
+    if not new then
+        if now then st.tops = topIds(now) end
+        return
+    end
     local okSet, err = pcall(CB.SetProfileByInfo, new)
     if not okSet then
         CH.lastError = tostring(err)
@@ -169,6 +219,7 @@ function CH.Update()
         end
         return
     end
+    if now then st.tops = topIds(now) end
     for _, n in ipairs(notes) do
         -- a higher rank of the same spell is set quietly; a new spell gets one line
         if not (n.from and spellName(n.from) == spellName(n.spell)) then
@@ -221,7 +272,7 @@ if OMQ.Alerts then
                 tip[#tip + 1] = { CH.TITLE[b], n .. (b == "LeftButton" and " (emergency)" or "") }
             end
         end
-        tip[#tip + 1] = "The addon moves them to better heals as you learn them. Your own bindings are never changed."
+        tip[#tip + 1] = "The addon moves them to better heals as you learn them. Your own bindings only move up to a new rank."
         tip[#tip + 1] = "Click this card to close it."
         return { {
             key = "clickintro", title = "New: Shift-click heals", tag = "HEALER",
