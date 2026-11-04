@@ -461,7 +461,7 @@ function UI:StripFrame() return strip end
 local WIN_TITLE = {
     death = "%s died first!", kb = "%s got the killing blow!", near = "%s nearly died first!",
     npc = "%s found the letter first!", player = "%s found the letter first!", run = "%s ran the most!",
-    dmg = "%s did the most damage!", fall = "%s took the biggest fall!", loot = "%s looted the most gold!",
+    dmg = "%s did the most damage!", fall = "%s took the highest fall!", loot = "%s looted the most gold!",
     roll = "%s rolled highest!",
 }
 
@@ -589,7 +589,7 @@ function UI.FormatValue(b, e)
     return string.format("%.0f", v)
 end
 
-local LINE_LABEL = { roll = "Rolls", run = "Yards walked", fall = "Biggest fall", dmg = "Damage", loot = "Gold looted" }
+local LINE_LABEL = { roll = "Rolls", run = "Yards walked", fall = "Highest fall", dmg = "Damage", loot = "Gold looted" }
 
 -- the values that decided, every dad, a random fallback marked (decisions 223 and 227):
 -- "Rolls: Karle rolled 78, Melchior rolled 35, Sieglinde rolled 93 (random - roll line not seen)"
@@ -627,7 +627,7 @@ local GO_LINE = {
     near   = "First to drop below 20% health and survive wins",
     npc    = "Find an NPC whose name starts with %s",
     player = "Find a stranger whose name starts with %s",
-    fall   = "Biggest fall you survive in 15 minutes wins",
+    fall   = "Highest fall without dying in 15 minutes wins",
     kb     = "The next killing blow wins",
     loot   = "Most gold looted in 10 minutes wins",
     roll   = "Rolling now - highest roll wins",

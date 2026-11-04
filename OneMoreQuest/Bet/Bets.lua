@@ -44,7 +44,7 @@ B.KINDS = {
     { id = "near",   name = "Who has the next near death?", q = "Who drops below 20% health next (and survives)?",     mode = "first", seconds = 900 },
     { id = "npc",    name = "NPC with a secret letter",     q = "Who first targets an NPC with the secret first letter?", mode = "first", seconds = 900, letter = true },
     { id = "player", name = "Player with a secret letter",  q = "Who first targets a stranger with the secret first letter?", mode = "first", seconds = 900, letter = true },
-    { id = "fall",   name = "Biggest fall, still alive",    q = "Who loses the biggest share of health in one fall and survives?", mode = "value", seconds = 900 },
+    { id = "fall",   name = "Highest fall without dying",   q = "Who loses the biggest share of health in one fall and survives?", mode = "value", seconds = 900 },
     { id = "kb",     name = "Next killing blow",            q = "Who lands the next killing blow?",                    mode = "first", untilSession = true },
     { id = "loot",   name = "Most gold looted",             q = "Who loots the most gold in 10 minutes?",              mode = "value", seconds = 600 },
     { id = "roll",   name = "Higher roll",                  q = "Who rolls highest (1-100)?",                          mode = "value", roll = true },
