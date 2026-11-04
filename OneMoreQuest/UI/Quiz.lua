@@ -166,7 +166,10 @@ function W:Build()
     f.close = button(f.dp, 110, 32, "Close"); f.close:SetPoint("BOTTOMLEFT", PAD, 16)
     f.close:SetScript("OnClick", function() Q:Decline() end)
 
+    -- hidden while it is built: that is no "close" (the first quiz would end at once)
+    self.updating = true
     f:Hide()
+    self.updating = false
     self.frame = f
     return f
 end
