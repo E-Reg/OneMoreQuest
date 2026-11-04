@@ -19,7 +19,9 @@ local MEET = { id = "meet", label = "Meeting point", icon = "Interface\\Icons\\I
 -- The position is stored as the left edge and vertical centre of the collapsed
 -- bar (relative to the bottom left of the screen). The bar always grows to the
 -- right; only when it would leave the screen it grows to the left instead and
--- the icons are mirrored.
+-- the icons are mirrored, so the meeting point icon stays on the screen edge.
+-- While it is dragged the bar is not clamped to the screen: the meeting point
+-- icon itself can reach the right edge, and on the drop the bar flips.
 local anchorLeft, anchorY = nil, nil
 local flipped = false
 
@@ -46,6 +48,10 @@ local function savePosition()
     if not (left and right and top and bottom) then return end
     anchorLeft = flipped and (right - collapsedW()) or left
     anchorY = (top + bottom) / 2
+    -- the meeting point icon always stays fully on the screen
+    anchorLeft = math.max(0, math.min(anchorLeft, screenW() - collapsedW()))
+    local half = (SIZE + PAD * 2) / 2
+    anchorY = math.max(half, math.min(anchorY, screenH() - half))
     OMQ.db.guide.point = { "LEFT", "BOTTOMLEFT", anchorLeft, anchorY }
 end
 
@@ -199,8 +205,17 @@ local function build()
     frame:SetMovable(true)
     frame:EnableMouse(true)
     frame:RegisterForDrag("LeftButton")
-    startDrag = function() if moveMode then frame:StartMoving() end end
-    stopDrag = function() frame:StopMovingOrSizing(); savePosition(); layout() end
+    startDrag = function()
+        if not moveMode then return end
+        frame:SetClampedToScreen(false)          -- lets the meeting point icon reach the right edge
+        frame:StartMoving()
+    end
+    stopDrag = function()
+        frame:StopMovingOrSizing()
+        savePosition()
+        frame:SetClampedToScreen(true)
+        layout()
+    end
     frame:SetScript("OnDragStart", startDrag)
     frame:SetScript("OnDragStop", stopDrag)
 
@@ -221,6 +236,8 @@ end
 function B:IsExpanded() return expanded end
 function B:Frame() return frame end
 function B:IsFlipped() return flipped end
+function B:AnchorLeft() return anchorLeft end       -- left edge of the meeting point icon area
+function B:AnchorButton() return buttons[1] end     -- the meeting point button (always shown)
 function B:Count() return count end
 function B:ItemId(i) return buttons[i] and buttons[i].kind end
 

@@ -1,6 +1,8 @@
 -- One More Quest: check bar. A second small icon bar that hangs above the guidance bar (it moves with
 -- it and is shown with it). Collapsed it shows only the Group Check button; hovering it slides out
--- the others (the group vote of /omq). Same behaviour as the guidance bar, same growth direction.
+-- the others (the group vote of /omq). Same behaviour as the guidance bar: it grows to the right and
+-- only when it would leave the screen it grows to the left (mirrored), so the Group Check icon stays
+-- above the meeting point icon on the screen edge. The check bar decides this on its own width.
 local ADDON, OMQ = ...
 OMQ = _G.OneMoreQuest
 
@@ -52,13 +54,21 @@ local function layout()
     if not frame then return end
     items = currentItems()
     local n = expanded and #items or CB.COLLAPSED
-    local guide = OMQ.GuideBar and OMQ.GuideBar:Frame()
+    local width = PAD * 2 + n * (SIZE + GAP) - GAP
+    local GB = OMQ.GuideBar
+    local guide = GB and GB:Frame()
+    local anchorBtn = GB and GB.AnchorButton and GB:AnchorButton()
+    local left = GB and GB.AnchorLeft and GB:AnchorLeft()
+    local screenW = (UIParent and UIParent.GetWidth and UIParent:GetWidth()) or 1920
+    flipped = left and (left + width > screenW) and true or false
     frame:ClearAllPoints()
-    if guide then
-        if flipped then frame:SetPoint("BOTTOMRIGHT", guide, "TOPRIGHT", 0, 2)
-        else frame:SetPoint("BOTTOMLEFT", guide, "TOPLEFT", 0, 2) end
+    if anchorBtn then            -- hangs above the meeting point icon, the guide bar's padding (4) around it
+        if flipped then frame:SetPoint("BOTTOMRIGHT", anchorBtn, "TOPRIGHT", 4, 6)
+        else frame:SetPoint("BOTTOMLEFT", anchorBtn, "TOPLEFT", -4, 6) end
+    elseif guide then
+        frame:SetPoint("BOTTOMLEFT", guide, "TOPLEFT", 0, 2)
     end
-    frame:SetSize(PAD * 2 + n * (SIZE + GAP) - GAP, SIZE + PAD * 2)
+    frame:SetSize(width, SIZE + PAD * 2)
     local used = {}
     for i, it in ipairs(items) do
         local b = buttons[it.id] or makeButton(it)
@@ -162,15 +172,15 @@ local function build()
     layout()
 end
 
--- follows the guidance bar: same visibility, same side
-local function follow(guide, isFlipped)
+-- follows the guidance bar: same visibility, same screen edge
+local function follow(guide)
     if not frame then return end
-    flipped = isFlipped and true or false
     if guide and guide:IsShown() then frame:Show() else frame:Hide() end
     layout()
 end
 
 function CB:IsExpanded() return expanded end
+function CB:IsFlipped() return flipped end
 function CB:Count()                    -- the fixed items available now (bets from 5, duel from 15, Spell Rhythm from 20)
     local n = 0
     for _, it in ipairs(ITEMS) do if not it.show or it.show() then n = n + 1 end end
@@ -194,6 +204,6 @@ OMQ:On("READY", function()
     if OMQ.GuideBar then
         OMQ.GuideBar.onLayout = follow
         local g = OMQ.GuideBar:Frame()
-        if g then follow(g, OMQ.GuideBar:IsFlipped()) end
+        if g then follow(g) end
     end
 end)
