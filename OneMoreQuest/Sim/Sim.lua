@@ -195,9 +195,9 @@ local function scheduleValues(b)
                 local v
                 if b.kind == "run" then v = rnd(40, 600)
                 elseif b.kind == "loot" then v = rnd(0, 3000)
-                elseif b.kind == "fall" then v = (math.random() < 0.2) and -1 or rnd(0, 450) end
+                elseif b.kind == "fall" then v = (math.random() < 0.2) and -1 or rnd(0, 800) end   -- tenths of a percent of max health
                 -- a short simulator bet: a value that fits one minute (decision 395)
-                if b.test and v and v > 0 then v = math.max(1, math.floor(v * B().Seconds(k) / k.seconds)) end
+                if b.test and v and v > 0 and b.kind ~= "fall" then v = math.max(1, math.floor(v * B().Seconds(k) / k.seconds)) end
                 local left = (b.endsAt or (now() + k.seconds)) - now()
                 later(math.max(0.5, left - rnd(5, 20) / 10), function()
                     local cur = B():Get(b.id)

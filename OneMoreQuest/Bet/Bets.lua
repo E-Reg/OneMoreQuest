@@ -44,7 +44,7 @@ B.KINDS = {
     { id = "near",   name = "Who has the next near death?", q = "Who drops below 20% health next (and survives)?",     mode = "first", seconds = 900 },
     { id = "npc",    name = "NPC with a secret letter",     q = "Who first targets an NPC with the secret first letter?", mode = "first", seconds = 900, letter = true },
     { id = "player", name = "Player with a secret letter",  q = "Who first targets a stranger with the secret first letter?", mode = "first", seconds = 900, letter = true },
-    { id = "fall",   name = "Biggest fall, still alive",    q = "Who takes the biggest fall damage in one fall and survives?", mode = "value", seconds = 900 },
+    { id = "fall",   name = "Biggest fall, still alive",    q = "Who loses the biggest share of health in one fall and survives?", mode = "value", seconds = 900 },
     { id = "kb",     name = "Next killing blow",            q = "Who lands the next killing blow?",                    mode = "first", untilSession = true },
     { id = "loot",   name = "Most gold looted",             q = "Who loots the most gold in 10 minutes?",              mode = "value", seconds = 600 },
     { id = "roll",   name = "Higher roll",                  q = "Who rolls highest (1-100)?",                          mode = "value", roll = true },
@@ -383,6 +383,14 @@ local function fellRecently()
     return t - lastFallAt <= FALL_DEATH_WINDOW
 end
 B._fellRecently = fellRecently
+-- fall damage in hit points -> tenths of a percent of max health (nil when unreadable)
+function B.FallShare(amount)
+    if type(amount) ~= "number" or isSecret(amount) then return nil end
+    local maxHp = UnitHealthMax and UnitHealthMax("player")
+    if type(maxHp) ~= "number" or isSecret(maxHp) or maxHp <= 0 then return nil end
+    return math.max(0, math.min(1000, math.floor(amount * 1000 / maxHp + 0.5)))
+end
+
 local function tickMeasure()
     local s = session()
     local t = now()
@@ -413,7 +421,9 @@ local function tickMeasure()
     if info and (info.events or 0) > fallSeen then
         fallSeen = info.events
         lastFallAt = t
-        local amount = info.lastAmount
+        -- the fall counts in tenths of a percent of my max health, so dads with more health are not ahead
+        -- (decision 397): 1000 = all my health; the window shows it as "34.5%"
+        local amount = B.FallShare(info.lastAmount)
         -- the deadly fall can be seen after the death: dead now, or died within the window, is out
         local died = (UnitIsDeadOrGhost and UnitIsDeadOrGhost("player")) or (t - lastDeathAt <= FALL_DEATH_WINDOW)
         for _, b in pairs(bets) do

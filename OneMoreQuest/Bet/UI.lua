@@ -576,7 +576,7 @@ function UI.FormatValue(b, e)
     local k = b.kind
     if k == "roll" then return string.format("rolled %.0f", v)
     elseif k == "run" then return string.format("%.0f yd", v)
-    elseif k == "fall" then return v < 0 and "died from the fall" or string.format("%.0f fall damage", v)
+    elseif k == "fall" then return v < 0 and "died from the fall" or string.format("%.1f%% health lost in the fall", v / 10)
     elseif k == "dmg" then return string.format("%.0f damage", v)
     elseif k == "loot" then return money(v)
     elseif k == "death" then return "died after " .. clock(v)
