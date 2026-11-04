@@ -270,7 +270,7 @@ OMQ:On("READY", function()
     end)
 end)
 
-OMQ:RegisterCommand("taxi", function()
+OMQ:RegisterCommand("taxitime", function()
     local store = X:Store() or {}
     local mine, shared = 0, 0
     for _, r in pairs(store) do if r.me then mine = mine + 1 else shared = shared + 1 end end

@@ -605,7 +605,7 @@ end
 ----------------------------------------------------------------------
 -- The panel next to the auction house
 ----------------------------------------------------------------------
-selUI, rows = nil, {}
+local selUI, rows = nil, {}
 
 local function qColor(q)
     local c = ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[q or 1]
