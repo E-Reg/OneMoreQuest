@@ -73,6 +73,8 @@ jobs:
             echo "Release v$VER exists, nothing to do"; exit 0
           fi
           zip -qr "OneMoreQuest_v$VER.zip" OneMoreQuest
+          notes=".github/release-notes/v$VER.md"
+          if [ -f "$notes" ]; then set -- --notes-file "$notes"
+          else set -- --notes "Unzip into the Interface/AddOns folder of your WoW Forever installation, then /reload in the game."; fi
           gh release create "v$VER" "OneMoreQuest_v$VER.zip" \
-            --title "One More Quest v$VER" \
-            --notes "Unzip into the Interface/AddOns folder of your WoW Forever installation, then /reload in the game."
+            --title "One More Quest v$VER" "$@"
