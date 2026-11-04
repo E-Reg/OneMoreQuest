@@ -25,6 +25,23 @@ local MISS = { .88, .28, .28 }
 local TEXT = { .9, .9, .9 }
 local DIM = { .6, .6, .6 }
 local I = "Interface\\Icons\\"
+W.NO_ICON = I .. "INV_Misc_QuestionMark"
+W.MISSED_ALPHA = .55  -- a missed note keeps running out of the lane, grey and faded (not dark)
+
+-- a recycled tile gets the whole look of its note every frame: icon (only set when it changes, a spell without
+-- a texture shows the question mark), colour, grey for a missed note, alpha. Tiles are never faded by a
+-- clipping parent: the timeline hides a tile itself when it leaves the lane (a faded tile inside a clipping frame
+-- could render black).
+local function setIcon(t, tex, grey, alpha)
+    tex = tex or W.NO_ICON
+    if t.tex ~= tex then t.tex = tex; t.icon:SetTexture(tex) end
+    if t.icon.SetVertexColor then t.icon:SetVertexColor(1, 1, 1, 1) end
+    if t.icon.SetDesaturated then t.icon:SetDesaturated(grey and true or false) end
+    t.grey = grey and true or false
+    if t.SetAlpha then t:SetAlpha(alpha or 1) end
+    t.alpha = alpha or 1
+end
+W._SetIcon = setIcon
 
 local function font(fs, file, size)
     if fs.SetFont then pcall(fs.SetFont, fs, file, size, "") end
@@ -68,11 +85,13 @@ local function tile(parent, size)
     t:SetSize(size, size)
     boxed(t, .1, .1, .12)
     -- the flash after a key: a coloured frame around the icon (green = hit, red = wrong key)
-    t.flash = t:CreateTexture(nil, "BACKGROUND")
+    -- (own sublevel above the backdrop pieces, so the draw order is fixed)
+    t.flash = t:CreateTexture(nil, "BACKGROUND", nil, 7)
     t.flash:SetPoint("TOPLEFT", -4, 4); t.flash:SetPoint("BOTTOMRIGHT", 4, -4)
     t.flash:Hide()
     t.icon = t:CreateTexture(nil, "ARTWORK")
     t.icon:SetPoint("TOPLEFT", 3, -3); t.icon:SetPoint("BOTTOMRIGHT", -3, 3)
+    t.icon:SetTexture(W.NO_ICON)
     t.key = font(t:CreateFontString(nil, "OVERLAY", "GameFontNormal"), BODY_FONT, 12)
     t.key:SetPoint("TOP", t, "BOTTOM", 0, -3)
     color(t.key, GOLD)
@@ -176,7 +195,6 @@ function W:Build()
     f.lane = CreateFrame("Frame", nil, f.pp, BACKDROP)
     boxed(f.lane, .09, .09, .11)
     f.lane:SetSize(LANE_W, LANE_H); f.lane:SetPoint("TOPLEFT", PAD, -60)
-    if f.lane.SetClipsChildren then f.lane:SetClipsChildren(true) end
     f.zone = f.lane:CreateTexture(nil, "BACKGROUND", nil, 1)
     f.zone:SetSize(ICON + 12, LANE_H - 6); f.zone:SetPoint("CENTER", f.lane, "LEFT", HIT_X, 0)
     f.zone:SetColorTexture(1, .82, 0, .1)
@@ -272,7 +290,7 @@ function W:Refresh()
             local sp = r.spells[i]
             t:ClearAllPoints(); t:SetPoint("TOPLEFT", f.cp, "TOPLEFT", PAD + ((i - 1) % 4) * tw, -170 - math.floor((i - 1) / 4) * 54)
             if sp then
-                t:Show(); t.icon:SetTexture(sp.icon); t.name:SetText(sp.name); t.key:SetText(R.ShortKey(sp.key))
+                t:Show(); setIcon(t, sp.icon); t.name:SetText(sp.name); t.key:SetText(R.ShortKey(sp.key))
             else t:Hide() end
         end
         f.close:Hide()
@@ -323,23 +341,25 @@ function W:Frame()
         if used >= POOL then break end
         -- a pressed note stays where it was hit and flashes green (hit) or red (wrong key), then goes
         local flash = n.at and (n.done ~= "miss" or n.wrong) and nowT - n.at < W.FLASH
-        if not n.done or flash or (n.done == "miss" and not n.wrong) then
+        local x = HIT_X + (flash and n.ahead or ahead) / R.LOOK * span
+        -- a missed note that has run out of the lane on the left is gone (no clipping frame, see setIcon)
+        local inLane = x - ICON / 2 >= 0
+        if inLane and (not n.done or flash or (n.done == "miss" and not n.wrong)) then
             used = used + 1
             local ic = f.icons[used]
             local sp = r.spells[n.s]
             ic:ClearAllPoints()
-            ic:SetPoint("CENTER", f.lane, "LEFT", HIT_X + (flash and n.ahead or ahead) / R.LOOK * span, 6)
-            ic.icon:SetTexture(sp and sp.icon)
+            ic:SetPoint("CENTER", f.lane, "LEFT", x, 6)
             ic.key:SetText(sp and R.ShortKey(sp.key) or "")
             if flash then
                 local c = n.wrong and MISS or PERFECT
                 ic.flash:SetColorTexture(c[1], c[2], c[3], 1)
                 ic.flash:Show()
                 setEdge(ic, c)
-                if ic.SetAlpha then ic:SetAlpha(1 - 0.6 * (nowT - n.at) / W.FLASH) end
+                setIcon(ic, sp and sp.icon, false, math.max(.4, math.min(1, 1 - 0.6 * (nowT - n.at) / W.FLASH)))
             else
                 ic.flash:Hide()
-                if ic.SetAlpha then ic:SetAlpha(n.done and .3 or 1) end
+                setIcon(ic, sp and sp.icon, n.done and true or false, n.done and W.MISSED_ALPHA or 1)
                 setEdge(ic, (not n.done and math.abs(ahead) <= R.GOOD) and GOLD or EDGE_PLAIN)
             end
             ic.note = n
