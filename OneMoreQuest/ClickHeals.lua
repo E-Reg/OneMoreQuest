@@ -2,8 +2,10 @@
 -- Healing classes get two bindings on unit frames (party frames, player, target):
 --   Shift + left click  = the emergency heal
 --   Shift + right click = the comfortable heal
--- A binding holds the base spell, so it always casts the highest learned rank. The addon picks the
--- best spell the character knows and moves the binding along when a better one is learned.
+-- A binding casts exactly the spell id it holds: it does NOT move to a new rank by itself (a Classic
+-- rank is its own spell id). So the addon binds the highest learned rank and sets the binding again
+-- on every rank up. It picks the best spell the character knows and moves the binding along when a
+-- better spell or a higher rank is learned.
 -- Rules: existing bindings are never overwritten, only the addon's own. A binding of ours
 -- the dad removed or changed by hand stays his; we do not put it back. Only out of combat
 -- (SetProfileByInfo is restricted), never while the game's click casting window is open.
@@ -69,6 +71,37 @@ function CH.Wanted(button)
             if not (CB and CB.CanSpellBeClickBound) or CB.CanSpellBeClickBound(id) then best = id end
         end
     end
+    return best and CH.TopRank(best)
+end
+
+-- the highest learned rank of a spell, by name in the spell book; the id itself when the book
+-- cannot be read or the spell has no ranks
+function CH.TopRank(id)
+    local name = spellName(id)
+    local SB = C_SpellBook
+    if not (name and SB and SB.GetNumSpellBookSkillLines and SB.GetSpellBookSkillLineInfo and SB.GetSpellBookItemInfo) then
+        return id
+    end
+    local bank = Enum and Enum.SpellBookSpellBank and Enum.SpellBookSpellBank.Player or 0
+    local spellType = Enum and Enum.SpellBookItemType and Enum.SpellBookItemType.Spell
+    local best, bestRank = id, -1
+    for line = 1, SB.GetNumSpellBookSkillLines() or 0 do
+        local info = SB.GetSpellBookSkillLineInfo(line)
+        if info then
+            for i = 1, info.numSpellBookItems or 0 do
+                local item = SB.GetSpellBookItemInfo((info.itemIndexOffset or 0) + i, bank)
+                if item and item.spellID and (spellType == nil or item.itemType == spellType) and not item.isPassive
+                    and not item.isOffSpec and (item.name or spellName(item.spellID)) == name then
+                    local sub = item.subName
+                    if (sub == nil or sub == "") and C_Spell and C_Spell.GetSpellSubtext then
+                        sub = C_Spell.GetSpellSubtext(item.spellID)
+                    end
+                    local rank = type(sub) == "string" and tonumber(sub:match("%d+")) or 0
+                    if rank > bestRank and knows(item.spellID) then best, bestRank = item.spellID, rank end
+                end
+            end
+        end
+    end
     return best
 end
 
@@ -99,8 +132,8 @@ function CH.Plan(profile, st, wantOf, on)
             if not want then
                 remove[idx] = true; st[button] = nil; changed = true
             elseif want ~= mine then
+                notes[#notes + 1] = { button = button, spell = want, from = mine }
                 cur.actionID = want; st[button] = want; changed = true
-                notes[#notes + 1] = { button = button, spell = want }
             end
         elseif want and not cur and not st.given[button] then
             out[#out + 1] = { type = SPELL, actionID = want, button = button, modifiers = CH.SHIFT }
@@ -137,7 +170,10 @@ function CH.Update()
         return
     end
     for _, n in ipairs(notes) do
-        OMQ:Print(string.format("Click casting: %s on a unit frame casts %s", WHAT[n.button], spellName(n.spell) or "?"))
+        -- a higher rank of the same spell is set quietly; a new spell gets one line
+        if not (n.from and spellName(n.from) == spellName(n.spell)) then
+            OMQ:Print(string.format("Click casting: %s on a unit frame casts %s", WHAT[n.button], spellName(n.spell) or "?"))
+        end
     end
 end
 
