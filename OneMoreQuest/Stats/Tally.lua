@@ -496,6 +496,7 @@ local function talk(kindName)
     if not n then n = { n = 0, t = time(), l = myLevel(), k = {} }; b.npcs[id] = n; note("npc.new") end
     n.k[kindName] = true
     n.lt = time()
+    if not n.nm then local nm = call(UnitName, "npc"); if str(nm) then n.nm = nm end end
     if GetTime() - (lastTalk[id] or -1000) >= TALK_AGAIN then
         n.n = n.n + 1
         lastTalk[id] = GetTime()
