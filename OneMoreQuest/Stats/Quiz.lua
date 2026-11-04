@@ -13,6 +13,7 @@ local L = OMQ.Ledger
 Q.QUESTIONS = 5
 Q.INVITE_TIME = 15
 Q.CLOSE_TIME = 15
+Q.NEXT_TIME = 10
 Q.STREAK_CARD = 10
 
 local function ok(v) return v ~= nil and not (issecretvalue and issecretvalue(v)) end
@@ -509,7 +510,7 @@ function Q:Answer(choice)
     if not (r and q and r.phase == "question" and q.options[choice]) then return nil end
     local rec = self:Record()
     local right = choice == q.right
-    r.choice, r.phase = choice, "answered"
+    r.choice, r.phase, r.answeredAt = choice, "answered", GetTime()
     r.answered = r.answered + 1
     r.results = r.results or {}
     r.results[r.answered] = right
@@ -559,6 +560,9 @@ function Q:Tick()
         note("invite.timeout")
         self.run = nil
         OMQ:Fire("QUIZ_CHANGED")
+    elseif r and r.phase == "answered" and GetTime() - (r.answeredAt or 0) >= self.NEXT_TIME then
+        note("next.timeout")
+        self:Next()
     elseif r and r.endAt and GetTime() - r.endAt >= self.CLOSE_TIME then
         note("closed.timeout")
         self.run = nil

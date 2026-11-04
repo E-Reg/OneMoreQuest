@@ -163,7 +163,7 @@ function W:Build()
     f.big:SetPoint("TOPLEFT", PAD, -70)
     f.lines = font(f.dp:CreateFontString(nil, "OVERLAY", "GameFontHighlight"), BODY_FONT, 13)
     f.lines:SetPoint("TOPLEFT", f.big, "BOTTOMLEFT", 0, -10); f.lines:SetWidth(SMALL - 2 * PAD); f.lines:SetJustifyH("LEFT")
-    f.close = button(f.dp, 110, 32, "Close"); f.close:SetPoint("BOTTOMLEFT", PAD, 16)
+    f.close = button(f.dp, 110, 32, "Close"); f.close:SetPoint("BOTTOMRIGHT", -PAD, 16)
     f.close:SetScript("OnClick", function() Q:Decline() end)
 
     -- hidden while it is built: that is no "close" (the first quiz would end at once)
@@ -245,7 +245,8 @@ function W:Refresh()
             color(f.verdict, good and RIGHT or WRONG)
             f.reveal:SetText(q.reveal or "")
             f.next:Show()
-            f.next.label:SetText(run.i >= #run.list and "See result" or "Next question")
+            local left = math.max(0, math.ceil(Q.NEXT_TIME - (GetTime() - (run.answeredAt or GetTime()))))
+            f.next.label:SetText((run.i >= #run.list and "See result" or "Next question") .. " (" .. left .. ")")
         else
             f.verdict:SetText(""); f.reveal:SetText("")
             f.next:Hide()
@@ -281,6 +282,6 @@ OMQ:On("QUIZ_CHANGED", function() W:SafeRefresh() end)
 OMQ:On("READY", function()
     C_Timer.NewTicker(1, function()
         local p = Q.run and Q.run.phase
-        if (p == "invite" or p == "done" or p == "landed") and W.frame and W.frame:IsShown() then W:SafeRefresh() end
+        if (p == "invite" or p == "answered" or p == "done" or p == "landed") and W.frame and W.frame:IsShown() then W:SafeRefresh() end
     end)
 end)
