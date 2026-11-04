@@ -12,6 +12,7 @@ local L = OMQ.Ledger
 
 Q.QUESTIONS = 5
 Q.INVITE_TIME = 15
+Q.CLOSE_TIME = 15
 Q.STREAK_CARD = 10
 
 local function ok(v) return v ~= nil and not (issecretvalue and issecretvalue(v)) end
@@ -536,7 +537,7 @@ end
 function Q:Next()
     local r = self.run
     if not r or r.phase ~= "answered" then return end
-    if r.i >= #r.list then r.phase = "done" else r.i, r.phase, r.choice = r.i + 1, "question", nil end
+    if r.i >= #r.list then r.phase, r.endAt = "done", GetTime() else r.i, r.phase, r.choice = r.i + 1, "question", nil end
     OMQ:Fire("QUIZ_CHANGED")
 end
 -- the landing: an open invitation goes away, a quiz with answers shows what was reached
@@ -547,7 +548,7 @@ function Q:Landed()
         note("landed.empty")
         self.run = nil
     elseif r.phase ~= "done" and not r.full then
-        r.phase = "landed"
+        r.phase, r.endAt = "landed", GetTime()
         note("landed.early")
     end
     OMQ:Fire("QUIZ_CHANGED")
@@ -556,6 +557,10 @@ function Q:Tick()
     local r = self.run
     if r and r.phase == "invite" and GetTime() - r.at >= self.INVITE_TIME then
         note("invite.timeout")
+        self.run = nil
+        OMQ:Fire("QUIZ_CHANGED")
+    elseif r and r.endAt and GetTime() - r.endAt >= self.CLOSE_TIME then
+        note("closed.timeout")
         self.run = nil
         OMQ:Fire("QUIZ_CHANGED")
     end

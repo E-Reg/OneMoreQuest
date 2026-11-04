@@ -46,6 +46,15 @@ local function button(parent, w, h, text, primary)
     b.label:SetPoint("CENTER")
     b.label:SetText(text or "")
     color(b.label, primary and GOLD or TEXT)
+    -- hover: brighter face, gold edge, white text
+    b:SetScript("OnEnter", function(self)
+        setBg(self, primary and .62 or .26, primary and .12 or .26, primary and .1 or .28)
+        setEdge(self, GOLD); color(self.label, { 1, 1, 1 })
+    end)
+    b:SetScript("OnLeave", function(self)
+        setBg(self, primary and .45 or .16, primary and .07 or .16, primary and .07 or .18)
+        setEdge(self, primary and EDGE_GOLD or EDGE_PLAIN); color(self.label, primary and GOLD or TEXT)
+    end)
     return b
 end
 
@@ -109,18 +118,12 @@ function W:Build()
 
     -- invite
     f.inv = CreateFrame("Frame", nil, f); f.inv:SetAllPoints()
-    f.invIcon = f.inv:CreateTexture(nil, "ARTWORK"); f.invIcon:SetSize(48, 48); f.invIcon:SetPoint("TOP", 0, -48)
+    f.invIcon = f.inv:CreateTexture(nil, "ARTWORK"); f.invIcon:SetSize(48, 48); f.invIcon:SetPoint("TOP", 0, -18)
     f.invIcon:SetTexture(I .. "Ability_Mount_Wyvern_01")
-    f.invText = font(f.inv:CreateFontString(nil, "OVERLAY", "GameFontHighlight"), BODY_FONT, 14)
-    f.invText:SetPoint("TOP", 0, -106); f.invText:SetWidth(SMALL - 2 * PAD)
-    f.invText:SetText("5 questions about your own journey while you fly. Want to play?")
-    f.play = button(f.inv, 120, 34, "Play", true); f.play:SetPoint("TOPRIGHT", f.inv, "TOP", -6, -150)
+    f.play = button(f.inv, 130, 36, "Play", true); f.play:SetPoint("TOPRIGHT", f.inv, "TOP", -6, -106)
     f.play:SetScript("OnClick", function() Q:Play() end)
-    f.notNow = button(f.inv, 120, 34, "Not now"); f.notNow:SetPoint("TOPLEFT", f.inv, "TOP", 6, -150)
+    f.notNow = button(f.inv, 130, 36, "Not now"); f.notNow:SetPoint("TOPLEFT", f.inv, "TOP", 6, -106)
     f.notNow:SetScript("OnClick", function() Q:Decline() end)
-    f.invTime = font(f.inv:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"), BODY_FONT, 11)
-    f.invTime:SetPoint("TOP", 0, -196)
-    color(f.invTime, DIM)
 
     -- question
     f.qp = CreateFrame("Frame", nil, f); f.qp:SetAllPoints()
@@ -139,8 +142,12 @@ function W:Build()
         o.sub = font(o:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"), BODY_FONT, 11)
         o.sub:SetJustifyH("LEFT")
         o:SetScript("OnClick", function() Q:Answer(i) end)
-        o:SetScript("OnEnter", function(self) if Q.run and Q.run.phase == "question" then setEdge(self, GOLD) end end)
-        o:SetScript("OnLeave", function(self) if Q.run and Q.run.phase == "question" then setEdge(self, EDGE_PLAIN) end end)
+        o:SetScript("OnEnter", function(self)
+            if Q.run and Q.run.phase == "question" then setEdge(self, GOLD); setBg(self, .2, .18, .1); color(self.label, { 1, 1, 1 }) end
+        end)
+        o:SetScript("OnLeave", function(self)
+            if Q.run and Q.run.phase == "question" then setEdge(self, EDGE_PLAIN); setBg(self, .12, .12, .13); color(self.label, TEXT) end
+        end)
         f.opts[i] = o
     end
     f.verdict = font(f.qp:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge"), BODY_FONT, 15)
@@ -189,11 +196,11 @@ function W:Refresh()
     f.streak:SetText(run.phase ~= "invite" and ("Streak " .. (rec.streak or 0)) or "")
     color(f.streak, (rec.streak or 0) > 0 and GOLD or DIM)
     if run.phase == "invite" then
-        f:SetSize(SMALL, 220)
-        f.title:ClearAllPoints(); f.title:SetPoint("TOP", 0, -16)
+        f:SetSize(SMALL, 160)
+        f.title:ClearAllPoints(); f.title:SetPoint("TOP", 0, -72)
         f.title:SetText("Flight Quiz")
         f.inv:Show()
-        f.invTime:SetText("Closes by itself in " .. math.max(0, math.ceil(Q.INVITE_TIME - (GetTime() - run.at))) .. " s.")
+        f.notNow.label:SetText("Not now (" .. math.max(0, math.ceil(Q.INVITE_TIME - (GetTime() - run.at))) .. ")")
         for _, d in ipairs(f.dots) do d:Hide() end
     elseif run.phase == "question" or run.phase == "answered" then
         local q = Q:Current()
@@ -256,6 +263,7 @@ function W:Refresh()
             f.lines:SetText("You landed before all " .. Q.QUESTIONS .. " questions. This flight does not count for flight cards. Your answers still count for the streak.")
         end
         f.streak:SetText("")
+        f.close.label:SetText("Close (" .. math.max(0, math.ceil(Q.CLOSE_TIME - (GetTime() - (run.endAt or GetTime())))) .. ")")
     end
     placeDots(f, run)
     if not f:IsShown() then f:Show() end
@@ -269,6 +277,7 @@ end
 OMQ:On("QUIZ_CHANGED", function() W:SafeRefresh() end)
 OMQ:On("READY", function()
     C_Timer.NewTicker(1, function()
-        if Q.run and Q.run.phase == "invite" and W.frame and W.frame:IsShown() then W:SafeRefresh() end
+        local p = Q.run and Q.run.phase
+        if (p == "invite" or p == "done" or p == "landed") and W.frame and W.frame:IsShown() then W:SafeRefresh() end
     end)
 end)
