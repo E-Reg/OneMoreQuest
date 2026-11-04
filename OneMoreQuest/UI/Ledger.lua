@@ -444,7 +444,6 @@ function U:Flex(id)
     if not OMQ:Send("LF", me.guid, me.name, id, rec.n or 1, fid) then return false end
     lastFlex = { fid = fid, id = id }
     self.cardRest[id] = time() + REST
-    OMQ:Print("shown to the group: " .. c.title)
     return true
 end
 

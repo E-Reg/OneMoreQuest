@@ -1063,17 +1063,14 @@ function AH.Open()
     -- the scan of the whole house comes first; the cover goes up until the dump is read (decision 343)
     local PR = OMQ.Prices
     if PR and PR.Start then
-        if not PR.AutoOn() then
-            OMQ:Print("auction helper: price scan on opening is switched off in the options")
-        elseif PR.Busy() then
+        if not PR.AutoOn() or PR.Busy() then
         else
             local at = PR.ScannedAt()
             local age = at and ((time and time() or 0) - at)
             if age and age <= PR.MAX_AGE then
-                OMQ:Print(string.format("auction helper: no new scan, the last one is only %d min old (the server allows one about every %d min)", math.floor(age / 60), math.floor(PR.MAX_AGE / 60)))
+                -- the last scan is still fresh: no new one
             else
-                local ok, why = PR.Start(false)
-                if not ok then OMQ:Print("auction helper: the price scan did not start - " .. tostring(why)) end
+                PR.Start(false)
             end
         end
     end

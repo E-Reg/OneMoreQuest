@@ -203,7 +203,6 @@ local function finish()
     elseif q > b then result, color = CHOICES.Q.text, CHOICES.Q.color
     elseif b > q then result, color = CHOICES.B.text, CHOICES.B.color
     else result, color = "A tie", { 0.89, 0.71, 0.29 } end
-    OMQ:Print("Vote: " .. result)
     showResult(result, color)
     vote = nil
     if frame then frame:Hide() end

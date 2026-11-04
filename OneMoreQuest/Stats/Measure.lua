@@ -569,7 +569,6 @@ local function onRosterUpdate()
     local now = grouped()
     if now and not wasGrouped then
         M:ResetSession()
-        OMQ:Print("you joined a group: new session started")
     end
     wasGrouped = now
     if s then s.inGroup = now end

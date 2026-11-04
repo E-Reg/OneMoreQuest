@@ -329,7 +329,7 @@ local function build()
         if OMQ.Guide and OMQ.Guide:IsActive() then
             local back = IsShiftKeyDown and IsShiftKeyDown()
             if button == "LeftButton" then OMQ.Guide:Cycle(back and -1 or 1)
-            else OMQ.Guide:Clear(); OMQ:Print("guidance cancelled") end
+            else OMQ.Guide:Clear() end
             return
         end
         local back = IsShiftKeyDown and IsShiftKeyDown()

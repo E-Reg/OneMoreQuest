@@ -72,8 +72,6 @@ OMQ:RegisterMessage("F", function(f)
     if UnitOnTaxi and UnitOnTaxi("player") then return end
     pending = { dest = dest, who = (who and who ~= "") and who or "?", guid = guid, at = GetTime(),
                 x = tonumber(f[4]), y = tonumber(f[5]) }
-    OMQ:Print(string.format("%s flies to %s - open a flight master within %d seconds to follow automatically (the card gives you 5 minutes and the arrow)",
-        pending.who, dest, FOLLOW_SECONDS))
     OMQ:Fire("FLIGHT_PENDING")
     if OMQ.Alerts then OMQ.Alerts:Evaluate() end
 end)
@@ -132,7 +130,6 @@ local function follow()
     end
     if found then
         pending = nil
-        OMQ:Print("flying to " .. (nodeName(found) or p.dest) .. " with " .. p.who)
         OMQ:Fire("FLIGHT_PENDING")
         local ok, err = pcall(TakeTaxiNode, found)
         if not ok then OMQ:Error("flight", err) end

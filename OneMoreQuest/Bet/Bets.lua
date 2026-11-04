@@ -392,17 +392,9 @@ local function tickMeasure()
                 -- the chat line never came: a random roll counts, and everybody sees that (decision 223)
                 local v = math.random(1, 100)
                 report(b, v, "f")
-                OMQ:Print(string.format("Bet: your roll line was not seen - a random %d counts for you (roll %s; %s)", v,
-                    tostring(b.rollCall),
-                    B.lastRollLine and ("last roll line: \"" .. B.lastRollLine .. "\"")
-                    or string.format("system lines seen %d, secret %d, format %s", B.systemLines, B.secretLines,
-                        tostring(_G.RANDOM_ROLL_RESULT))))
             elseif k == "dmg" and b.fightEndAt and t >= b.fightEndAt then
                 local d = math.max(0, ((s and s.dmgMine) or 0) - (b.fightBase or 0))
                 report(b, d)
-                if d == 0 and OMQ.Measure and OMQ.Measure.FightDiag then
-                    OMQ:Print("Bet: your damage in that fight was read as 0 (" .. OMQ.Measure:FightDiag() .. ")")
-                end
             end
         end
     end

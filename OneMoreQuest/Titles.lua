@@ -141,7 +141,6 @@ function T:Pick(offer)
     if not (guid and offer) then return end
     store()[guid] = { id = offer.id, text = offer.text, reason = offer.reason, at = time() }
     T.pending = nil
-    OMQ:Print("Your title for the next session: " .. offer.text .. " (" .. (offer.reason or "") .. ")")
     T:SendMine()
     OMQ:Fire("TITLE_CHANGED", guid)
 end

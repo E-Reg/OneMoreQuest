@@ -332,8 +332,6 @@ local function go(p, titles, share)
     local radius = p.kind == "obj" and NQ.OBJ_RADIUS or NQ.NPC_RADIUS
     local label = "One more quest: " .. title
     if OMQ.Guide then OMQ.Guide:StartAt(label, p.a, p.b, p.inst, "omq", nil, { name = what, radius = radius }) end
-    local far = p.cost >= NQ.FAR and " - on another continent" or ""
-    OMQ:Print(string.format("one more quest: %s - %s%s", title, what, p.d and string.format(" (%d yd)", p.d) or far))
     if share then sendTarget(label, what, p, radius) end
     OMQ:Fire("NEXT_QUEST", p)
 end
@@ -386,10 +384,7 @@ function NQ.Press()
     local pos = myPos()
     if not pos then OMQ:Print("one more quest: no position here"); return end
     local log, titles = myLog()
-    local members, without = NQ.Members()
-    if without > 0 then OMQ:Print(string.format("one more quest: %d group member%s without the addon - not counted", without, without == 1 and "" or "s")) end
-    local _, unknown = NQ.Common(log, members)
-    if #unknown > 0 then OMQ:Print("one more quest: no quest list yet from " .. table.concat(unknown, ", ")) end
+    local members = NQ.Members()
     local st = { reqid = tostring(math.random(100000, 999999)), at = now(), members = members, replies = {},
                  log = log, titles = titles, pos = pos }
     st.avail = NQ.AvailableNear(pos, NQ.AVAIL_ASK, log)
@@ -434,7 +429,6 @@ OMQ:RegisterMessage("OQ", function(f)
         if not (a and b and OMQ.Guide) then return end
         OMQ.Guide:StartAt(f[3] ~= "" and f[3] or "One more quest", a, b, tonumber(f[7]) or 0, "omq", f[2],
             { name = f[4] ~= "" and f[4] or nil, radius = tonumber(f[8]) })
-        OMQ:Print("one more quest: " .. (f[3] or "") .. (f[4] ~= "" and (" - " .. f[4]) or ""))
     end
 end)
 
@@ -512,9 +506,6 @@ function NQ.GoZone(z)
     if not (w and OMQ.Guide) then OMQ:Print("no position known for " .. NQ.ZoneName(z)); return false end
     local name = NQ.ZoneName(z)
     OMQ.Guide:StartAt(name, w[1], w[2], w[3], "zone", nil, { name = hub[4] > 0 and "quest hub" or "middle of the zone", radius = 30 })
-    local pos = myPos()
-    local far = pos and pos.inst ~= w[3]
-    OMQ:Print(string.format("journey: on to %s (level %d-%d)%s", name, z[2], z[3], far and " - on the other continent: take a boat or zeppelin" or ""))
     return true
 end
 
@@ -531,7 +522,7 @@ function NQ.Diag()
         if d then with = with + 1; if has(d[13], 8) then dungeon = dungeon + 1 end end
     end
     out[#out + 1] = string.format("quests in my log: %d, with places: %d, objectives in a dungeon: %d", n, with, dungeon)
-    local members, without = NQ.Members()
+    local members = NQ.Members()
     local common, unknown = NQ.Common(log, members)
     out[#out + 1] = string.format("dads with the addon: %d, without: %d, quests everybody has: %d", #members, without, #common)
     if #unknown > 0 then out[#out + 1] = "no quest list yet from: " .. table.concat(unknown, ", ") end

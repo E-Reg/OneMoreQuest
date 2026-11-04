@@ -274,8 +274,6 @@ ev:SetScript("OnEvent", function(_, event)
             if event == "MERCHANT_SHOW" and C_Timer and C_Timer.After then
                 C_Timer.After(1, function()                      -- the list may be filled a moment later
                     P.LearnVendor()
-                    local m = P.lastMerchant
-                    if m and m.items > 0 and m.learned == 0 then OMQ:Print("prices: could not read the vendor prices of this merchant") end
                 end)
             end
         elseif event == "AUCTION_HOUSE_SHOW" then

@@ -85,9 +85,6 @@ function Q:SellJunk()
             end
         end
     end
-    if sold > 0 then
-        OMQ:Print(string.format("sold %d grey item%s for %s", sold, sold == 1 and "" or "s", money(total)))
-    end
 end
 
 ----------------------------------------------------------------------
@@ -149,8 +146,6 @@ function Q:BuyWater()
         BuyMerchantItem(bestIndex, n)
         bought = bought + n
     end
-    local name = (C_Item and C_Item.GetItemNameByID and C_Item.GetItemNameByID(best.id)) or "water"
-    OMQ:Print(string.format("bought %d %s (now %d)", bought, name, WATER_TARGET - want + bought))
 end
 
 ----------------------------------------------------------------------
@@ -315,8 +310,6 @@ function Q:BuyAmmo()
         BuyMerchantItem(bestIndex, n)
         bought = bought + n
     end
-    local name = (C_Item and C_Item.GetItemNameByID and C_Item.GetItemNameByID(best.id)) or (ammoSub == 2 and "arrows" or "bullets")
-    OMQ:Print(string.format("bought %d %s", bought, name))
 end
 
 -- /omq diag for hunters: shows step by step what the ammo purchase sees

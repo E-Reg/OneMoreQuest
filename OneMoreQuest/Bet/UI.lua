@@ -549,9 +549,6 @@ function UI:ShowResult(id)
     if done and m and OMQ.Sound then
         for _, r in ipairs(rows) do if r.guid == m.guid and r.net > 0 then OMQ.Sound:Play("done") end end
     end
-    OMQ:Print("Bet: " .. title .. (done and "" or (" (" .. B().KIND[b.kind].name .. ")")))
-    local vl = UI.ValuesLine(b)
-    if vl then OMQ:Print(vl) end
 end
 function UI:ResultFrame() return result end
 
@@ -704,9 +701,6 @@ OMQ:On("BET_ACTIVE", function(id, on)
     if on then
         -- every dad sees the start in the middle of the screen, in or not (decision 179)
         UI:ShowStart(id)
-        if involved(b) then
-            OMQ:Print("Bet on: " .. B().KIND[b.kind].name .. (b.letter and (" - the secret letter is " .. b.letter .. "!") or ""))
-        end
     elseif involved(b) then
         UI:ShowResult(id)
     end

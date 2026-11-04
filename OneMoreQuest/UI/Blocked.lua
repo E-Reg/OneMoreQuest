@@ -13,7 +13,6 @@ OMQ.Blocked = B
 
 local MAX = 30
 local entries = {}
-local said = {}
 local combatSince = nil
 
 local function now() return GetTime and GetTime() or 0 end
@@ -36,10 +35,6 @@ function B.Record(event, addon, func)
     entries[#entries + 1] = e
     trim()
     if OMQ.db then OMQ.db.blockedLog = entries end
-    if not said[e.func] then
-        said[e.func] = true
-        OMQ:Print("blocked action: " .. e.func .. " (" .. B.Where(e) .. "). /omq blocked shows the log")
-    end
     return e
 end
 
@@ -96,7 +91,6 @@ OMQ:RegisterCommand("blocked", function(arg)
     local cmd, value = (arg or ""):match("^(%S*)%s*(.-)$")
     if cmd == "clear" then
         for i = #entries, 1, -1 do entries[i] = nil end
-        said = {}
         OMQ:Print("blocked actions: log cleared")
     elseif cmd == "taintlog" then
         local level = (value == "off" or value == "0") and "0" or "1"

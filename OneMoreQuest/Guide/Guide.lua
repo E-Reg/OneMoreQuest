@@ -288,7 +288,6 @@ function G:Current()
     if dest.kind == "pin" or dest.kind == "corpse" then
         local fresh = self:Candidates(dest.kind, dest.arg)
         if #fresh == 0 then
-            OMQ:Print(dest.label .. " is gone - guidance ended")
             self:Clear()
             return nil
         end
@@ -307,7 +306,6 @@ function G:Current()
     local c = dest.cands[dest.idx]
     if not c then self:Clear(); return nil end
     if c.d and c.d <= (dest.radius or ARRIVE_YARDS) then
-        OMQ:Print("arrived: " .. (c.name or dest.label))
         self:Clear()
         return nil
     end
