@@ -156,11 +156,23 @@ local function pickFor()
     return list[rnd(1, #list)].guid
 end
 
+-- bet simulator: the fake dad always bets against my pick, so every bet has a winner and a loser
+local function againstMe(d, b)
+    local m = OMQ:GetSelf()
+    local mine = m and b and b.answers[m.guid]
+    if not mine then return d.guid end
+    if mine == d.guid then return m.guid end
+    return d.guid
+end
+S.AgainstMe = againstMe
+
 local function joinLater(d, id, pick)
     later(rnd(20, 60) / 10, function()
         local b = B():Get(id)
         if not b or b.state ~= "join" or b.answers[d.guid] ~= nil then return end
-        if pick or math.random() < JOIN_CHANCE then
+        if S.betTest then
+            deliver(d, "BJ", id, d.guid, againstMe(d, b), "1")
+        elseif pick or math.random() < JOIN_CHANCE then
             deliver(d, "BJ", id, d.guid, pick or pickFor(), "1")
         else
             deliver(d, "BJ", id, d.guid, "-", "0")
@@ -184,7 +196,10 @@ local function scheduleValues(b)
                 if b.kind == "run" then v = rnd(40, 600)
                 elseif b.kind == "loot" then v = rnd(0, 3000)
                 elseif b.kind == "fall" then v = (math.random() < 0.2) and -1 or rnd(0, 450) end
-                later(k.seconds - rnd(5, 20) / 10, function()
+                -- a short simulator bet: a value that fits one minute (decision 395)
+                if b.test and v and v > 0 then v = math.max(1, math.floor(v * B().Seconds(k) / k.seconds)) end
+                local left = (b.endsAt or (now() + k.seconds)) - now()
+                later(math.max(0.5, left - rnd(5, 20) / 10), function()
                     local cur = B():Get(b.id)
                     if cur and cur.state == "active" then value(d, b.id, v) end
                 end)
@@ -264,9 +279,9 @@ function S:StartBet(d, kind)
         letter = L:sub(i, i)
     end
     local id = tostring(time()) .. "sim" .. rnd(100, 999)
-    local stake = math.min(1000, B().MaxStake())
+    local stake = S.betTest and 100 or math.min(1000, B().MaxStake())
     deliver(d, "BS", id, d.guid, kind, tostring(stake), letter)
-    deliver(d, "BJ", id, d.guid, pickFor(), "1")
+    deliver(d, "BJ", id, d.guid, S.betTest and d.guid or pickFor(), "1")
     for _, o in ipairs(dads) do if o ~= d then joinLater(o, id) end end
     return true, id
 end
@@ -406,6 +421,7 @@ function S:Stop(quiet)
     end
     for g in pairs(byGuid) do OMQ.users[g] = nil end
     self.active = false
+    self.betTest = false
     dads, byGuid, guids = {}, {}, {}
     if OMQ.ResetGroupCache then OMQ:ResetGroupCache() end
     if OMQ.QTrack then OMQ.QTrack:Hide() end

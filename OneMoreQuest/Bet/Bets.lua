@@ -26,6 +26,15 @@ local ROLL_WAIT = 10
 local FALL_DEATH_WINDOW = 3        -- dying this soon after a fall counts as dying from it
 local LETTERS = "ABDEFGHKLMNPRST"  -- frequent first letters only
 B.JOIN_SECONDS, B.COOLDOWN, B.MAX_RUNNING = JOIN_SECONDS, COOLDOWN, MAX_RUNNING
+B.TEST_SECONDS = 60                -- bet simulator (Sim/BetSim.lua): timed bets run 1 minute, no cooldown
+
+-- the bet simulator runs: fake dad only, short bets, no cooldown, no real mail
+function B.TestMode() return (OMQ.Sim and OMQ.Sim.active and OMQ.Sim.betTest) and true or false end
+-- how long a timed bet runs (nil: no time limit)
+function B.Seconds(k)
+    if not (k and k.seconds) then return nil end
+    return B.TestMode() and B.TEST_SECONDS or k.seconds
+end
 
 -- first = the first dad with the event wins; value = the highest value at the end wins
 B.KINDS = {
@@ -171,7 +180,7 @@ end
 function B:CanStart(kind)
     if not OMQ:GetChannel() then return false, "You need a group with other dads." end
     local wait = lastStart + COOLDOWN - now()
-    if wait > 0 then return false, string.format("Your next bet is possible in %d:%02d.", math.floor(wait / 60), math.floor(wait % 60)) end
+    if wait > 0 and not B.TestMode() then return false, string.format("Your next bet is possible in %d:%02d.", math.floor(wait / 60), math.floor(wait % 60)) end
     local n, kinds = running()
     if n >= MAX_RUNNING then return false, "Three bets are running already." end
     if kind and kinds[kind] then return false, "A bet of this kind is running already." end
@@ -249,7 +258,8 @@ local function activate(b)
     b.state = "active"
     b.startedAt = now()
     local k = KIND[b.kind]
-    if k.seconds then b.endsAt = now() + k.seconds end
+    if k.seconds then b.endsAt = now() + B.Seconds(k) end
+    b.test = B.TestMode() or nil
     local s = session() or {}
     b.base = { yards = s.yards or 0, near = s.nearDeaths or 0, dmg = s.dmgMine or 0 }
     b.looted, b.bestFall = 0, nil
@@ -727,7 +737,10 @@ function B:Running()
     end
     return out
 end
-function B:CooldownLeft() return math.max(0, lastStart + COOLDOWN - now()) end
+function B:CooldownLeft()
+    if B.TestMode() then return 0 end
+    return math.max(0, lastStart + COOLDOWN - now())
+end
 
 -- the hover on the Bet Check icon (decision 166)
 function B:FillTooltip(tt)
@@ -821,8 +834,12 @@ OMQ:RegisterCommand("bet", function(arg)
         fire()
         return
     end
+    if arg == "sim" then
+        if OMQ.BetSim then OMQ.BetSim:Toggle() end
+        return
+    end
     if OMQ.BetUI then OMQ.BetUI:ToggleCreate() end
-end, "Bet Check: open the bet window (/omq bet clear empties your bet ledger)")
+end, "Bet Check: open the bet window (/omq bet clear empties your bet ledger, /omq bet sim opens the bet simulator)")
 
 -- test hooks
 B._tickMeasure, B._tickJudge, B._report = tickMeasure, tickJudge, report

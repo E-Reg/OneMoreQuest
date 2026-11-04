@@ -48,7 +48,11 @@ local function duration(k)
     if k.untilSession then return "until the session ends" end
     if k.fight then return "the next fight" end
     if k.roll then return "one roll" end
-    if k.seconds then return math.floor(k.seconds / 60) .. " minutes" end
+    if k.seconds then
+        local sec = B().Seconds(k)
+        if sec ~= k.seconds then return math.floor(sec / 60) .. " minute (simulator)" end
+        return math.floor(k.seconds / 60) .. " minutes"
+    end
     return ""
 end
 UI.Duration = duration
@@ -128,6 +132,9 @@ local function button(parent, w, h, label, onClick)
     b:SetScript("OnClick", function(self) if self.enabledLook and onClick then onClick(self) end end)
     return b
 end
+-- the same widgets for the bet simulator (Sim/BetSim.lua)
+UI.Panel, UI.Text, UI.Button = panel, text, button
+UI.ClassColor = classColor
 
 ----------------------------------------------------------------------
 -- Create window
@@ -246,6 +253,13 @@ function UI:ToggleCreate()
     if OMQ.Unlock and not OMQ.Unlock:Has("bets") then OMQ:Print("Bets open at level 5."); return end
     if not create then buildCreate() end
     if create:IsShown() then create:Hide(); return end
+    create:Show()
+    self:RefreshCreate()
+end
+-- open the create window with a bet already chosen (bet simulator)
+function UI:OpenCreate(kind, pick, stake)
+    if not create then buildCreate() end
+    sel.kind, sel.pick, sel.stake = kind, pick, stake
     create:Show()
     self:RefreshCreate()
 end

@@ -137,6 +137,10 @@ end
 local function payStep()
     local l = OMQ.Bets.Ledger()
     for _, e in ipairs(l.owe) do
+        -- bet simulator: a debt to the fake dad is not mailed (it goes when the simulator ends)
+        if e.state ~= "paid" and not skipped[e] and OMQ.Bets.TestMode() and OMQ.Sim:IsSim(e.to) then
+            skipped[e] = true
+        end
         if e.state ~= "paid" and not skipped[e] then
             if not e.toFull or e.toFull == "" then e.toFull = OMQ.Bets.FullNameOf(e.to) end
             if not e.toFull then
