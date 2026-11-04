@@ -27,6 +27,7 @@ OMQ.AuctionHelper = AH
 
 AH.CUT, AH.MARGIN, AH.DURATION = 0.05, 1.05, 2          -- duration index 2 = 24 hours
 AH.PRICE_TTL, AH.QUERY_TIMEOUT, AH.LOW_DAYS = 300, 4, 3
+AH.RETRIES = 2              -- a search without an answer is sent again this often (decision 402)
 AH.ROWS = 12
 -- speed (decision 293): clicks go first - no new search for QUIET seconds after a click; prices of up to
 -- BATCH items come with one request (C_AuctionHouse.SearchForItemKeys), the single search stays the fallback
@@ -322,6 +323,7 @@ local function readPrice(e)
 end
 
 local function gotPrice(e)
+    e.timeouts = nil
     if e.onResult then                                   -- a search of the buy mode (decision 264)
         local ok, err = pcall(e.onResult, e)
         if not ok then OMQ:Error("auction buy result", err) end
@@ -405,11 +407,16 @@ local function onBatch(q)
         end
     end
     local B = OMQ.AuctionBuy
+    -- an answer that holds none of the asked items is not ours (the game's own window asked, decision 402):
+    -- nothing is taken from it, every item is asked on its own
+    local empty = q.lastN == 0                       -- the last answer was empty: nobody sells them
+    local ours = empty or AH.BatchHits(q)
     for _, e in ipairs(q.batch) do
         tried[e.key] = true
-        local res = byKey[keyString(e.itemKey)] or (e.commodity and byId[e.itemID])
-        if e.onResult ~= nil or e.kind then             -- a stock row of the buy mode
-            if B and B.FromBatch then B.FromBatch(e, res) end
+        local res = ours and not empty and (byKey[keyString(e.itemKey)] or (e.commodity and byId[e.itemID])) or nil
+        if not ours then                                -- asked on its own
+        elseif e.onResult ~= nil or e.kind then         -- a stock row of the buy mode: one missing in a filled answer is asked on its own
+            if (res or empty) and B and B.FromBatch then B.FromBatch(e, res) end
         elseif res then
             prices[e.key] = { price = res.minPrice, at = now() }
         elseif e.commodity then
@@ -417,6 +424,28 @@ local function onBatch(q)
         end                                             -- a single item not found: asked on its own
     end
     if B and B.Build then B.Build() end
+end
+-- does the browse answer hold one of the items a batch asked for?
+function AH.BatchHits(q)
+    local A = CA()
+    local want = {}
+    for _, e in ipairs(q.batch or {}) do want[e.itemID] = true end
+    for _, res in ipairs(A.GetBrowseResults and A.GetBrowseResults() or {}) do
+        if res.itemKey and want[res.itemKey.itemID] then return true end
+    end
+    return false
+end
+-- does a browse answer fit the question? a batch: one of its items; a browse for a class: one item of that class
+function AH.Fits(q)
+    if q.batch then return AH.BatchHits(q) end
+    local f = q.query and q.query.itemClassFilters and q.query.itemClassFilters[1]
+    if not (f and f.classID) then return true end
+    local A = CA()
+    for _, res in ipairs(A.GetBrowseResults and A.GetBrowseResults() or {}) do
+        local id = res.itemKey and res.itemKey.itemID
+        if id and select(6, instant(id)) == f.classID then return true end
+    end
+    return false
 end
 local function batchQuery()
     local A = CA()
@@ -442,7 +471,24 @@ function AH._pump()
     if not (A and A.SendSearchQuery) or not AH.open then return end
     if asking then
         if now() - askedAt < AH.QUERY_TIMEOUT then return end
-        gotPrice(asking)                               -- no answer: read what is there
+        local q = asking
+        -- no answer in time: the same question again before "not on sale" (decision 402); a batch falls back as before
+        local retry = not q.batch and (q.timeouts or 0) < AH.RETRIES
+        if retry and q.browse then
+            local n = #(A.GetBrowseResults and A.GetBrowseResults() or {})
+            retry = not q.answered or (n > 0 and not AH.Fits(q))
+        end
+        if retry then
+            if A.IsThrottledMessageSystemReady and not A.IsThrottledMessageSystemReady() then return end
+            q.timeouts, askedAt = (q.timeouts or 0) + 1, now()
+            if q.browse then
+                if A.SendBrowseQuery then A.SendBrowseQuery(q.query) end
+            else
+                A.SendSearchQuery(q.itemKey, sorts(), true)
+            end
+            return
+        end
+        gotPrice(q)                                    -- no answer: read what is there
         return
     end
     if A.IsThrottledMessageSystemReady and not A.IsThrottledMessageSystemReady() then return end
@@ -1116,10 +1162,12 @@ ev:SetScript("OnEvent", function(_, event, a1)
                 -- it a moment later; an empty answer waits for the next one (or the timeout)
                 local A = CA()
                 local n = #(A.GetBrowseResults and A.GetBrowseResults() or {})
+                asking.lastN = n
                 asking.answers = asking.answers or {}
                 asking.answers[#asking.answers + 1] = string.format("%s %d%s after %.1fs", event == "AUCTION_HOUSE_BROWSE_RESULTS_ADDED" and "added" or "updated",
                     n, (A.HasFullBrowseResults and not A.HasFullBrowseResults()) and " (not full)" or "", now() - askedAt)
-                if n > 0 then gotPrice(asking) end
+                -- an answer for somebody else (the game's own window) waits for ours or the timeout (decision 402)
+                if n > 0 and AH.Fits(asking) then gotPrice(asking) end
             end
         elseif event == "AUCTION_HOUSE_THROTTLED_SYSTEM_READY" then AH.Pump()
         elseif event == "AUCTION_HOUSE_AUCTION_CREATED" then

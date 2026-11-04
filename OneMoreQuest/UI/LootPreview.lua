@@ -59,6 +59,15 @@ function LP.Gain(link, equipLoc, class, role, wornOf)
         local d = S.HandDelta(link, equipLoc, wornOf(slot), wornOf(16), wornOf(17), class, role)
         if d and (not best or d > best) then best = d end
     end
+    -- a one-hander for a dad who fights with two weapons (a weapon in the off hand) may replace the off-hand one too (decision 402)
+    if equipLoc == "INVTYPE_WEAPON" then
+        local oh = wornOf(17)
+        local ohLoc = type(oh) == "string" and select(4, instant(oh))
+        if ohLoc == "INVTYPE_WEAPON" or ohLoc == "INVTYPE_WEAPONOFFHAND" then
+            local d = S.Delta(link, oh, class, role)
+            if d and (not best or d > best) then best = d end
+        end
+    end
     return best
 end
 

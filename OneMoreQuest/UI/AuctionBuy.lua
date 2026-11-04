@@ -81,6 +81,26 @@ function B.Have(id)
     if e and (bags >= (e.n or 0) or clock() - (e.t or 0) > B.MAIL_DAYS * 86400) then m[id] = nil; e = nil end
     return e and math.max(bags, e.n) or bags
 end
+-- the mailbox is open and holds no auction mail with the item any more: it was taken (or used up), the note goes
+-- (decision 402) - else a dad who used some of his stock before he went to the mailbox stayed "stocked" for 30 days
+B.MAIL_GRACE = 60          -- seconds: the mail of a purchase needs a moment to arrive
+function B.CheckMail()
+    if not (GetInboxNumItems and GetInboxItem) then return end
+    local shown, total = GetInboxNumItems()
+    shown = tonumber(shown) or 0
+    if total and tonumber(total) and tonumber(total) > shown then return end     -- not every mail is listed: keep the notes
+    local inMail = {}
+    for i = 1, shown do
+        for a = 1, (ATTACHMENTS_MAX_RECEIVE or 16) do
+            local ok, _, id = pcall(GetInboxItem, i, a)
+            if ok and type(id) == "number" and not isSecret(id) then inMail[id] = true end
+        end
+    end
+    local m = mailbox()
+    for id, e in pairs(m) do
+        if not inMail[id] and clock() - (e.t or 0) > B.MAIL_GRACE then m[id] = nil end
+    end
+end
 -- base: what I had when I clicked (if the bags already got it, it is not counted twice)
 function B.Bought(id, qty, base)
     if not (id and qty and qty > 0) then return end
@@ -157,7 +177,7 @@ end
 -- 1. a class that buffs the same stat itself needs no consumable for it (Arcane Intellect, Power Word:
 --    Fortitude, Divine Spirit); only once it knows the spell
 B.CLASS_BUFFS = {
-    MAGE   = { { lines = { "e_int", "s_int" }, spells = { 1459, 1460, 1461, 10156, 10157 } } },
+    MAGE   = { { lines = { "s_int" }, spells = { 1459, 1460, 1461, 10156, 10157 } } },     -- the elixirs stack with it
     PRIEST = { { lines = { "s_sta" }, spells = { 1243, 1244, 1245, 2791, 10937, 10938 } },
                { lines = { "s_spi" }, spells = { 14752, 14818, 14819, 27841 } } },
 }
@@ -347,6 +367,23 @@ function B.TooDear(r)
     return o.unit * r.target > (GetMoney and GetMoney() or 0) * B.PRICEY
 end
 
+-- an item found in the bags (B.LearnBags) comes back as a row only when it fits me (decision 402): an item of a
+-- buy line only when the line is mine (no mana potions for a warrior, no intellect scroll for a rogue) and it is
+-- not weaker than the best of its line for my level; buff food and items of no line as before
+function B.UsedFits(id, kind, ln, myLines, lvl)
+    if kind == "food" or not ln then return true end
+    if not myLines[ln] then return false end
+    local bestId = best(ln, lvl)
+    if not bestId or bestId == id then return true end
+    local L = OMQ.BuyLines[ln][2]
+    local iBest, iMe
+    for i, it in ipairs(L) do
+        if it[1] == bestId then iBest = i end
+        if it[1] == id then iMe = i end
+    end
+    return not (iBest and iMe and iMe < iBest)
+end
+
 function B.Build()
     for i = #rows, 1, -1 do rows[i] = nil end
     for i = #alts, 1, -1 do alts[i] = nil end
@@ -366,6 +403,11 @@ function B.Build()
     end
     local lines = B.Lines(class, role)
     local excluded = B.Excluded(class, lines)
+    local myLines = {}
+    for _, l in ipairs(lines) do
+        if l == "stone" then l = B.StoneLine() end
+        if l then myLines[l] = true end
+    end
     for _, line in ipairs(lines) do
         if line == "stone" then line = B.StoneLine() end
         if line == "heal" and not excluded[line] then
@@ -419,7 +461,7 @@ function B.Build()
         local minLevel = select(5, info(id))
         local ln = B.LineOf(id)
         if not seen[id] and (not minLevel or minLevel <= lvl) and kind ~= "kit" and kind ~= "spike"
-            and ln ~= "heal" and not (ln and excluded[ln]) then      -- health potions: see the chain above (decision 288)
+            and ln ~= "heal" and not (ln and excluded[ln]) and B.UsedFits(id, kind, ln, myLines, lvl) then      -- health potions: see the chain above (decision 288)
             add(rowFor(id, kind, nil, B.TARGET[kind] or 5, true))
         end
     end
@@ -553,7 +595,8 @@ local function onBrowse(dump)
             x.state = "done"
             local bestO, bestG
             for _, o in ipairs(readOffers(x)) do
-                if o.link and o.buyout <= budget() then
+                local need = select(5, info(o.link or 0))
+                if o.link and o.buyout <= budget() and not (need and need > level() + B.WEAPON_LEVELS) then
                     local g = gainOf(o.link, x.equipLoc)
                     if g and g > 0 and (not bestG or g > bestG or (g == bestG and o.buyout < bestO.buyout)) then bestO, bestG = o, g end
                 end
@@ -564,11 +607,24 @@ local function onBrowse(dump)
     end
 end
 
+-- the level a weapon offer needs; nil while the game has not loaded the item (it is asked for)
+local function needLevel(link)
+    local need = select(5, info(link))
+    if need == nil and C_Item and C_Item.RequestLoadItemDataByID then
+        local id = tonumber(tostring(link):match("item:(%d+)"))
+        if id then pcall(C_Item.RequestLoadItemDataByID, id) end
+    end
+    return need
+end
+B.NeedLevel = needLevel
 function B.Weapons()
     for i = #weapons, 1, -1 do weapons[i] = nil end
     local never = (db()).never
+    local maxLevel = level() + B.WEAPON_LEVELS
     for _, c in ipairs(candidates) do
-        if c.offer and c.gain and not never[c.itemID] and not c.bought then weapons[#weapons + 1] = c end
+        -- only what I can wield within WEAPON_LEVELS: an offer whose level is not known yet waits (decision 402)
+        local need = c.offer and needLevel(c.offer.link)
+        if c.offer and c.gain and need and need <= maxLevel and not never[c.itemID] and not c.bought then weapons[#weapons + 1] = c end
     end
     table.sort(weapons, function(a, b) return a.gain > b.gain end)
     for i = #weapons, B.WEAPON_ROWS + 1, -1 do weapons[i] = nil end
@@ -961,7 +1017,7 @@ function B.UseDump()
     local changed = false
     for _, list in ipairs({ rows, foods, alts }) do
         for _, r in ipairs(list) do
-            if r.state == "price" then
+            if r.state == "price" and not r.live then
                 local stack = select(8, info(r.itemID))
                 if (stack or 1) > 1 then
                     local p, q = P.Auction(r.itemID)
@@ -1042,11 +1098,20 @@ B._buying = function() return buying end
 -- purchase the game never answers is given up after B.BUY_WAIT seconds, so nothing hangs.
 B.BUY_WAIT = 6
 local done
+local late = nil           -- the purchase given up last: a confirmation that comes late still counts (decision 402)
+B.LATE_WAIT = 30
 function B.Busy()
     if not buying then return false end
     if now() - (buying.at or 0) < B.BUY_WAIT then return true end
+    local b = buying
     done(false, "no answer from the auction house - click again")
+    late = { b = b, at = now() }
     return false
+end
+local function succeeded()
+    if not buying and late and now() - late.at < B.LATE_WAIT then buying = late.b end
+    late = nil
+    done(true)
 end
 local function watch()
     if C_Timer and C_Timer.After then C_Timer.After(B.BUY_WAIT + 0.1, function() B.Busy() end) end
@@ -1141,11 +1206,14 @@ end
 function done(ok, why)
     local b = buying
     buying = nil
-    if b and b.weapon then b.weapon.bought = ok or nil end
+    if b and b.weapon then
+        b.weapon.bought = ok or nil
+        if not ok then b.weapon.state, b.weapon.offer, b.weapon.gain = "price", nil, nil end   -- gone or refused: look again (decision 402)
+    end
     if b and b.row then
         if ok and not b.row.bagKind then B.Bought(b.row.itemID, b.qty, b.base); B.Consume(b.row, b.qty) end
         if b.row.bagKind then b.row.bought = ok or nil
-        elseif not ok then b.row.state = "price" end    -- failed: look at the offers again
+        elseif not ok then b.row.state, b.row.live, b.row.estimate = "price", true, nil end    -- failed: a real search of the offers, no estimate (decision 402)
     end
     if not ok and why then OMQ:Print("auction helper: " .. why) end
     B.Build()
@@ -1172,7 +1240,7 @@ function B.BatchRows()
     local out, tried = {}, AH()._tried or {}
     for _, list in ipairs({ rows, foods, alts }) do
         for _, r in ipairs(list) do
-            if r.state == "price" and not tried[r.key] and not r.listed then
+            if r.state == "price" and not tried[r.key] and not r.listed and not r.live then
                 local stack = select(8, info(r.itemID))
                 if (stack or 1) > 1 then r.listed = true; out[#out + 1] = r end
             end
@@ -1195,7 +1263,7 @@ end
 local ev = CreateFrame("Frame")
 for _, e in ipairs({ "COMMODITY_PRICE_UPDATED", "COMMODITY_PRICE_UNAVAILABLE", "COMMODITY_PURCHASE_SUCCEEDED",
                      "COMMODITY_PURCHASE_FAILED", "AUCTION_HOUSE_PURCHASE_COMPLETED", "AUCTION_HOUSE_SHOW_ERROR",
-                     "BAG_UPDATE_DELAYED", "GET_ITEM_INFO_RECEIVED" }) do
+                     "BAG_UPDATE_DELAYED", "GET_ITEM_INFO_RECEIVED", "MAIL_INBOX_UPDATE" }) do
     pcall(ev.RegisterEvent, ev, e)
 end
 -- the game's price for a purchase may be above an estimate: then no purchase, the offers are looked at
@@ -1207,6 +1275,7 @@ function B.PriceOk(expect, total)
 end
 ev:SetScript("OnEvent", function(_, event, a1, a2)
     local ok, err = pcall(function()
+        if event == "MAIL_INBOX_UPDATE" then B.CheckMail(); return end
         if not (AH() and AH().open) then return end
         local A = CA()
         if event == "COMMODITY_PRICE_UPDATED" then
@@ -1220,7 +1289,7 @@ ev:SetScript("OnEvent", function(_, event, a1, a2)
                 end
             end
         elseif event == "COMMODITY_PRICE_UNAVAILABLE" then done(false, "that price is gone - looking again")
-        elseif event == "COMMODITY_PURCHASE_SUCCEEDED" or event == "AUCTION_HOUSE_PURCHASE_COMPLETED" then done(true)
+        elseif event == "COMMODITY_PURCHASE_SUCCEEDED" or event == "AUCTION_HOUSE_PURCHASE_COMPLETED" then succeeded()
         elseif event == "COMMODITY_PURCHASE_FAILED" then done(false, "the purchase failed")
         elseif event == "AUCTION_HOUSE_SHOW_ERROR" then if buying then done(false, "the auction house refused it") end
         elseif event == "BAG_UPDATE_DELAYED" then B.LearnBags(); B.Build(); AH().Refresh()
@@ -1230,13 +1299,13 @@ ev:SetScript("OnEvent", function(_, event, a1, a2)
 end)
 
 function B.Open()
-    buying = nil
+    buying, late = nil, nil
     B.want.weapons, B.want.bags = false, false
     browse.state = "idle"
     resetBags()
     for i = #candidates, 1, -1 do candidates[i] = nil end
     for i = #bagCands, 1, -1 do bagCands[i] = nil end
-    for _, r in pairs(byId) do r.state = "price" end
+    for _, r in pairs(byId) do r.state, r.live = "price", nil end
     B.LearnBags()
     B.FoodCandidates(level())
     B.Build()
