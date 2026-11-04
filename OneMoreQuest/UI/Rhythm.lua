@@ -98,6 +98,14 @@ local function tile(parent, size)
     return t
 end
 
+-- a part of the Easy / Medium / Hard switch
+function W.PaintMode(b, on, can)
+    if on then b.bg:SetColorTexture(GOLD[1], GOLD[2], GOLD[3], 1) else b.bg:SetColorTexture(.2, .21, .25, 1) end
+    local c = on and { .07, .07, .08 } or (can and { .93, .93, .95 } or DIM)
+    color(b.label, c)
+    b.on, b.can = on and true or false, can and true or false
+end
+
 function W:Build()
     if self.frame then return self.frame end
     local f = CreateFrame("Frame", "OneMoreQuestRhythm", UIParent, BACKDROP)
@@ -146,18 +154,24 @@ function W:Build()
     end
     -- Easy / Medium / Hard: one toggle with three parts
     f.modes = {}
+    -- (plain textures like the segmented switch of the auction helper, no backdrop: the chosen part gold with
+    -- black letters, the others dark grey with white letters, grey letters when there are too few spells;
+    -- the hover light is a HIGHLIGHT texture the game shows and hides itself)
     for i, m in ipairs(R.MODES) do
-        local b = CreateFrame("Button", nil, f.sp, BACKDROP)
-        boxed(b, .12, .12, .13)
-        b:SetSize(96, 32)
-        b:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", PAD + (i - 1) * 100, 14)
+        local b = CreateFrame("Button", nil, f.sp)
+        b:SetSize(96, 30)
+        b:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", PAD + (i - 1) * 100, 15)
+        b.edge = b:CreateTexture(nil, "BACKGROUND"); b.edge:SetPoint("TOPLEFT", -1, 1); b.edge:SetPoint("BOTTOMRIGHT", 1, -1)
+        b.edge:SetColorTexture(EDGE_PLAIN[1], EDGE_PLAIN[2], EDGE_PLAIN[3], 1)
+        b.bg = b:CreateTexture(nil, "BORDER"); b.bg:SetAllPoints()
+        b.hl = b:CreateTexture(nil, "HIGHLIGHT"); b.hl:SetAllPoints(); b.hl:SetColorTexture(1, 1, 1, .08)
         b.label = font(b:CreateFontString(nil, "OVERLAY", "GameFontNormal"), BODY_FONT, 13)
         b.label:SetPoint("CENTER")
         b.label:SetText(m.name)
         b.mode = m
+        W.PaintMode(b, false, true)
         b:SetScript("OnClick", function() if R:Ready(m) then R:SetMode(m.id) end end)
         b:SetScript("OnEnter", function(self)
-            if R.run and R.run.mode ~= m then setEdge(self, GOLD) end
             if not GameTooltip then return end
             GameTooltip:SetOwner(self, "ANCHOR_TOP")
             GameTooltip:AddLine(m.name .. ": " .. m.n .. " spells")
@@ -165,7 +179,7 @@ function W:Build()
                 or ("Put at least " .. m.n .. " spells with a key on your action bars."), 1, 1, 1, true)
             GameTooltip:Show()
         end)
-        b:SetScript("OnLeave", function() W:SafeRefresh(); if GameTooltip then GameTooltip:Hide() end end)
+        b:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
         f.modes[i] = b
     end
     f.spellLine = font(f.sp:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"), BODY_FONT, 12)
@@ -256,9 +270,7 @@ function W:Refresh()
         local best = rec.best[r.mode.id] or {}
         for i, b in ipairs(f.modes) do
             local on, can = r.mode == b.mode, R:Ready(b.mode)
-            setEdge(b, on and GOLD or EDGE_PLAIN)
-            setBg(b, on and .45 or .12, on and .07 or .12, on and .07 or .13)
-            color(b.label, on and GOLD or (can and TEXT or DIM))
+            W.PaintMode(b, on, can)
         end
         for i, s in ipairs(f.songs) do
             local song = R.SONGS[i]
