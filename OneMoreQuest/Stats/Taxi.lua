@@ -127,6 +127,10 @@ function X:Time(from, to, yd)
     if r and num(r.s) then return r.s, false end
     local known = OMQ.taxiTimes and OMQ.taxiTimes[key(from, to)]
     if num(known) then return known, false end
+    -- the way back: the time of the other direction, as an estimate until this direction is flown
+    local back = (self:Store() or {})[key(to, from)]
+    if back and num(back.s) then return back.s, true end
+    if OMQ.taxiTimes and num(OMQ.taxiTimes[key(to, from)]) then return OMQ.taxiTimes[key(to, from)], true end
     if num(yd) then return math.floor(yd * self:Rate() + 0.5), true end
     return nil
 end
