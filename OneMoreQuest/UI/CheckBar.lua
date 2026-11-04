@@ -27,7 +27,7 @@ local ITEMS = {
     { id = "progress", label = "Progress Check", tip = "Click: your milestone timeline, from level 1 to 60",   -- decision 184
       icon = MEDIA .. "Icon_Progress" },
     { id = "duel", label = "Dad Duel", tip = "Click: challenge the dads in your group - 5 rounds with the foes of your journey",   -- from level 15
-      icon = "Interface\\Icons\\Ability_Warrior_Challange", show = function() return OMQ.Match and OMQ.Match:Unlocked() end },
+      icon = MEDIA .. "Icon_Duel", show = function() return OMQ.Match and OMQ.Match:Unlocked() end },
     { id = "rhythm", label = "Spell Rhythm", tip = "Click: press your spell keys to the beat of a song",   -- decision 381, from level 20
       icon = MEDIA .. "Icon_Rhythm", show = function() return OMQ.Rhythm and OMQ.Rhythm:Unlocked() end },
 }
