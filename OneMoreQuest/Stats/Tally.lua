@@ -310,6 +310,7 @@ local function record(victim, mine, killerIsMe)
             k.npc[id] = n
         end
         n.n = n.n + 1
+        n.lt = time()
         if mine then n.m = n.m + 1 end
         if e and e.name and not n.nm then n.nm = e.name end
         if e and e.type and not n.ty then n.ty = e.type end
@@ -416,6 +417,7 @@ local function enterMap()
     if zone then
         b.zones = b.zones or {}
         if not b.zones[zone] then b.zones[zone] = { t = time(), l = myLevel() }; note("zone.new") end
+        b.zones[zone].lt = time()
     end
     if id then
         T.map = id
@@ -493,6 +495,7 @@ local function talk(kindName)
     local n = b.npcs[id]
     if not n then n = { n = 0, t = time(), l = myLevel(), k = {} }; b.npcs[id] = n; note("npc.new") end
     n.k[kindName] = true
+    n.lt = time()
     if GetTime() - (lastTalk[id] or -1000) >= TALK_AGAIN then
         n.n = n.n + 1
         lastTalk[id] = GetTime()
@@ -713,6 +716,8 @@ local function onCast(unit, castGUID, spellID)
     local b = book()
     if not b then return end
     inc(b.spells, spellID)
+    b.spellLast = b.spellLast or {}          -- spell id -> time of the last cast
+    b.spellLast[spellID] = time()
     note("spell")
     local kind = spellKind(spellID)
     if kind == "herb" or kind == "mine" or kind == "skin" then
@@ -785,6 +790,19 @@ local function onLootMsg(msg)
     if matches(patCreate, msg) then
         b.prof.crafted = b.prof.crafted + 1
         if not b.prof.first then b.prof.first = time() end
+        -- per item: how often, first and last time
+        local id = tonumber(msg:match("|Hitem:(%d+)"))
+        if id then
+            b.craft = b.craft or {}
+            local c = b.craft[id]
+            if not c then
+                c = { n = 0, t = time(), l = myLevel(), nm = msg:match("|h%[(.-)%]|h"), q = q }
+                b.craft[id] = c
+                note("craft.new")
+            end
+            c.n = c.n + 1
+            c.lt = time()
+        end
         note("craft")
     elseif matches(patLoot, msg) and q then
         inc(b.loot, q)
@@ -1061,6 +1079,23 @@ function T:Report(part)
         print("  " .. (#line > 0 and table.concat(line, " ") or "nothing yet"))
         print("  cache " .. count(cur) .. "+" .. count(old) .. ", map " .. tostring(T.map) .. ", dungeon " .. tostring(dungeon and dungeon.id))
         if OMQ.Haul then OMQ.Haul:Line() end
+        return
+    end
+    if part == "recent" then
+        -- the newest entry of every "last time" field
+        local function newest(t, field)
+            local bk, bt = nil, 0
+            for key, v in pairs(t or {}) do
+                local at = type(v) == "table" and v[field] or v
+                if type(at) == "number" and at > bt then bk, bt = key, at end
+            end
+            return bk and (tostring(bk) .. (type(t[bk]) == "table" and t[bk].nm and (" " .. t[bk].nm) or "") .. " @" .. bt) or "-"
+        end
+        OMQ:Print("tally recent")
+        print("  last kill " .. newest(b.kills.npc, "lt") .. ", last zone " .. newest(b.zones, "lt"))
+        print("  last npc talk " .. newest(b.npcs, "lt") .. ", last spell " .. newest(b.spellLast))
+        print(string.format("  crafted kinds %d, last %s", count(b.craft), newest(b.craft, "lt")))
+        if OMQ.Haul and OMQ.Haul.RollLine then OMQ.Haul:RollLine() end
         return
     end
     if part == "gear" and OMQ.Haul then OMQ.Haul:Report(); return end

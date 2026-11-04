@@ -190,6 +190,62 @@ end
 H._Origin = origin
 
 ----------------------------------------------------------------------
+-- Own loot rolls: need, greed, pass or disenchant on any item, and whether it was won
+----------------------------------------------------------------------
+local MAX_ROLLS = 500
+local WON_WINDOW = 300      -- seconds between the click and "You won"
+local ROLL_KIND = { [0] = "pass", [1] = "need", [2] = "greed", [3] = "de" }
+local rollOf = {}           -- [rollID] = entry; a second call for the same roll changes the choice
+local function onRoll(rollID, rollType)
+    if not T.ready or not num(rollID) or not num(rollType) then return end
+    local c = ROLL_KIND[rollType]
+    if not c then return end
+    local b = book()
+    if not b then return end
+    b.rolls = b.rolls or {}
+    local e = rollOf[rollID]
+    if e then e.c = c; return end
+    local link = GetLootRollItemLink and call(GetLootRollItemLink, rollID)
+    local id, sfx, full = parseLink(link)
+    if not id then note("roll.nolink"); return end
+    e = { id = id, c = c, t = time(), l = myLevel(), q = quality(full), nm = full:match("|h%[(.-)%]|h") }
+    if sfx ~= 0 then e.sfx = sfx end
+    e.zn = T.map and T.ZoneOf and T.ZoneOf(T.map) or nil
+    if #b.rolls >= MAX_ROLLS then table.remove(b.rolls, 1) end
+    table.insert(b.rolls, e)
+    rollOf[rollID] = e
+    note("roll." .. c)
+end
+H._Roll = onRoll
+-- "You won": the newest open roll on that item
+local function rollWon(id)
+    local b = book()
+    local list = b and b.rolls
+    if not list then return end
+    for i = #list, 1, -1 do
+        local e = list[i]
+        if time() - e.t > WON_WINDOW then return end
+        if e.id == id and e.w == nil then e.w = true; note("roll.won"); return end
+    end
+end
+if hooksecurefunc then
+    if _G.RollOnLoot then hooksecurefunc("RollOnLoot", function(...) pcall(onRoll, ...) end) end
+    if C_Loot and C_Loot.RollOnLoot then hooksecurefunc(C_Loot, "RollOnLoot", function(...) pcall(onRoll, ...) end) end
+end
+
+function H:RollLine()
+    local list = (book() or {}).rolls or {}
+    local kinds = {}
+    for _, e in ipairs(list) do kinds[e.c] = (kinds[e.c] or 0) + 1 end
+    local out = {}
+    for k, n in pairs(kinds) do out[#out + 1] = k .. "=" .. n end
+    table.sort(out)
+    local e = list[#list]
+    print(string.format("  rolls %d (%s), last %s", #list, table.concat(out, " "),
+        e and (tostring(e.nm or e.id) .. " " .. e.c .. (e.w and " won" or "")) or "-"))
+end
+
+----------------------------------------------------------------------
 -- Entries
 ----------------------------------------------------------------------
 -- how: "loot" (loot message), "push" (quest, vendor, mail), "craft", "before" (the first start), "other"
@@ -326,7 +382,7 @@ local function onLootMsg(msg)
     local p = patterns()
     if matches(p.won, msg) then
         local id = parseLink(msg)
-        if id then won[id] = GetTime() end
+        if id then won[id] = GetTime(); rollWon(id) end
         return
     end
     for _, how in ipairs({ "craft", "loot", "push" }) do
