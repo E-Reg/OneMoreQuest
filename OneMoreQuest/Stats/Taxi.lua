@@ -39,10 +39,25 @@ X.Key = key
 ----------------------------------------------------------------------
 -- The taxi map: nodes, the route and its length
 ----------------------------------------------------------------------
--- slot index -> node id (names when the client has no ids)
+-- the map the taxi nodes are on: the taxi map, else the continent the player is on (Classic has no GetTaxiMapID)
+local function taxiMap()
+    local id = GetTaxiMapID and call(GetTaxiMapID)
+    if num(id) and id > 0 then return id end
+    local m = C_Map and C_Map.GetBestMapForUnit and call(C_Map.GetBestMapForUnit, "player")
+    for _ = 1, 8 do
+        if not num(m) then break end
+        local info = C_Map.GetMapInfo and call(C_Map.GetMapInfo, m)
+        if type(info) ~= "table" then break end
+        if info.mapType == 2 then return m end
+        m = info.parentMapID
+    end
+    return nil
+end
+X._TaxiMap = taxiMap
+-- slot index -> node id: from the taxi map, else from the English node name (names when nothing fits)
 local function nodeIds()
     local out = {}
-    local mapID = GetTaxiMapID and call(GetTaxiMapID)
+    local mapID = taxiMap()
     local list = C_TaxiMap and C_TaxiMap.GetAllTaxiNodes and num(mapID) and call(C_TaxiMap.GetAllTaxiNodes, mapID)
     if type(list) == "table" then
         for _, n in ipairs(list) do
@@ -54,7 +69,12 @@ end
 local function idOf(ids, slot)
     if ids[slot] then return ids[slot] end
     local nm = TaxiNodeName and call(TaxiNodeName, slot)
-    return str(nm) and nm or nil
+    if not str(nm) then return nil end
+    local fac = UnitFactionGroup and call(UnitFactionGroup, "player")
+    local byName = OMQ.taxiNodeIds and str(fac) and OMQ.taxiNodeIds[fac]
+    local id = byName and byName[nm:match("^([^,]+)") or nm]
+    if num(id) then note("id.byname"); return id end
+    return nm
 end
 local function currentSlot()
     local n = NumTaxiNodes and call(NumTaxiNodes)
@@ -69,6 +89,16 @@ local function yards(slot, mapID)
     if not num(hops) or hops < 1 then return nil end
     local w, h
     if C_Map and C_Map.GetMapWorldSize and num(mapID) then w, h = call(C_Map.GetMapWorldSize, mapID) end
+    if not (num(w) and num(h)) and C_Map and C_Map.GetWorldPosFromMapPos and CreateVector2D and num(mapID) then
+        -- Classic: the world size from the positions of two map corners
+        local _, a = call(C_Map.GetWorldPosFromMapPos, mapID, CreateVector2D(0, 0))
+        local _, b = call(C_Map.GetWorldPosFromMapPos, mapID, CreateVector2D(1, 1))
+        if type(a) == "table" and type(b) == "table" and a.GetXY and b.GetXY then
+            local ax, ay = a:GetXY()
+            local bx, by = b:GetXY()
+            if num(ax) and num(bx) then w, h = math.abs(by - ay), math.abs(bx - ax) end
+        end
+    end
     if not (num(w) and num(h) and w > 0 and h > 0) then return nil end
     local total = 0
     for i = 1, hops do
@@ -243,6 +273,7 @@ OMQ:RegisterCommand("taxi", function()
     local known = 0
     for _ in pairs(OMQ.taxiTimes or {}) do known = known + 1 end
     OMQ:Print(string.format("taxi: %d routes measured, %d from dads, %d known, %.3f s/yd", mine, shared, known, X:Rate()))
+    print("  map " .. tostring(taxiMap()) .. ", GetTaxiMapID " .. tostring(GetTaxiMapID ~= nil) .. ", GetAllTaxiNodes " .. tostring(C_TaxiMap and C_TaxiMap.GetAllTaxiNodes ~= nil))
     local f = X.flight
     if f then print("  flying " .. tostring(f.from) .. " -> " .. tostring(f.to) .. " " .. tostring(f.name) .. ", " .. tostring(f.secs) .. (f.est and " (estimate)" or "")) end
     local keys = {}

@@ -104,3 +104,22 @@ OMQ.taxiTimes = {
   ["80-55"]=231,["80-58"]=299,["80-61"]=231,["80-64"]=132,["80-65"]=415,["80-72"]=450,["80-73"]=459,["80-77"]=158,
   ["80-79"]=409,
 }
+-- node ids by the short English node name, for clients whose taxi map gives no ids
+OMQ.taxiNodeIds = {
+  Alliance = {
+    ["Stormwind"]=2,["Sentinel Hill"]=4,["Lakeshire"]=5,["Ironforge"]=6,["Menethil Harbor"]=7,["Thelsamar"]=8,
+    ["Darkshire"]=12,["Southshore"]=14,["Refuge Pointe"]=16,["Booty Bay"]=19,["Auberdine"]=26,["Rut'theran Village"]=27,
+    ["Astranaar"]=28,["Thalanaar"]=31,["Theramore"]=32,["Stonetalon Peak"]=33,["Nijel's Point"]=37,["Gadgetzan"]=39,
+    ["Feathermoon"]=41,["Aerie Peak"]=43,["Nethergarde Keep"]=45,["Moonglade"]=49,["Everlook"]=52,["Nighthaven"]=62,
+    ["Talrendis Point"]=64,["Talonbranch Glade"]=65,["Chillwind Camp"]=66,["Light's Hope Chapel"]=67,["Morgan's Vigil"]=71,["Cenarion Hold"]=73,
+    ["Thorium Point"]=74,["Marshal's Refuge"]=79,["Ratchet"]=80,
+  },
+  Horde = {
+    ["The Sepulcher"]=10,["Undercity"]=11,["Tarren Mill"]=13,["Hammerfall"]=17,["Booty Bay"]=18,["Grom'gol"]=20,
+    ["Kargath"]=21,["Thunder Bluff"]=22,["Orgrimmar"]=23,["Crossroads"]=25,["Sun Rock Retreat"]=29,["Freewind Post"]=30,
+    ["Shadowprey Village"]=38,["Gadgetzan"]=40,["Camp Mojache"]=42,["Valormok"]=44,["Bloodvenom Post"]=48,["Everlook"]=53,
+    ["Brackenwall Village"]=55,["Stonard"]=56,["Zoram'gar Outpost"]=58,["Splintertree Post"]=61,["Nighthaven"]=63,["Light's Hope Chapel"]=68,
+    ["Moonglade"]=69,["Flame Crest"]=70,["Cenarion Hold"]=72,["Thorium Point"]=75,["Revantusk Village"]=76,["Camp Taurajo"]=77,
+    ["Marshal's Refuge"]=79,["Ratchet"]=80,
+  },
+}
