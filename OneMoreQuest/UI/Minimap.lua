@@ -150,6 +150,11 @@ local function createButton()
 
     button:SetScript("OnEnter", function(self) OMQ.Tooltip:Show(self) end)
     button:SetScript("OnLeave", function() OMQ.Tooltip:Hide() end)
+    -- a tooltip taller than the room below the icon scrolls with the wheel (decision 376)
+    if button.EnableMouseWheel then button:EnableMouseWheel(true) end
+    button:SetScript("OnMouseWheel", function(self, delta)
+        if OMQ.Tooltip:IsShownFor(self) then OMQ.Tooltip:Scroll(delta) end
+    end)
     button:SetScript("OnDragStart", function(self)
         if IsShiftKeyDown() then
             self:SetScript("OnUpdate", onDragUpdate)
