@@ -16,6 +16,7 @@ FE.SECTIONS = {
         "Group statistics for the session, ranked between the dads: XP per hour, levels, gold, yards walked and yards on follow, damage share, killing blows, deaths, near deaths, fights started and more",
         "Lifetime statistics of every dad's character",
         "Quests are shared and accepted automatically between dads up to 5 levels apart",
+        "Catch Up for the dad who fell behind: every quest the dads have and you lack, what is missing for each one (level, quest chain, class, faction, an item you need) and the level that opens it; works in the group and alone, from the last picture of the group",
         "Group quest tracker: every dad's progress on shared quests",
         "Meeting point and map pin shared with the group",
         "Item score in every item tooltip, for you and for every dad: what each one wears and whether the item is an upgrade for his class and role",

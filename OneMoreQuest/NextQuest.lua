@@ -522,7 +522,7 @@ function NQ.Diag()
         if d then with = with + 1; if has(d[13], 8) then dungeon = dungeon + 1 end end
     end
     out[#out + 1] = string.format("quests in my log: %d, with places: %d, objectives in a dungeon: %d", n, with, dungeon)
-    local members = NQ.Members()
+    local members, without = NQ.Members()
     local common, unknown = NQ.Common(log, members)
     out[#out + 1] = string.format("dads with the addon: %d, without: %d, quests everybody has: %d", #members, without, #common)
     if #unknown > 0 then out[#out + 1] = "no quest list yet from: " .. table.concat(unknown, ", ") end
