@@ -3,6 +3,9 @@
 -- sharing does not work it is not tried again, and there is no card for quests. The only
 -- other trigger is a new group member: then everybody shares in turn (player 1, then
 -- player 2 ...), each quest tried once per round.
+-- Inside a dungeon or raid nothing is shared automatically (decision 409): quests accepted there are
+-- not pushed, and a round that falls inside (a dad reloads or reconnects) waits until I am outside
+-- again. In combat a waiting push is held until the fight is over.
 local ADDON, OMQ = ...
 OMQ = _G.OneMoreQuest
 
@@ -31,6 +34,22 @@ local roundStartAt                    -- a round starts at this time (debounced)
 local round                           -- { waitFor = guid or nil, started = bool, deadline, finishAt }
 local inRange                         -- defined below (decision 211)
 local doneAt = {}                     -- guid -> time we heard "QD" from that player
+local roundAfterInstance              -- a round was due while I was inside a dungeon (decision 409)
+
+-- Inside a dungeon or raid instance? No automatic sharing there (decision 409).
+local function inInstance()
+    if not IsInInstance then return false end
+    local ok, inside, kind = pcall(IsInInstance)
+    if not ok or not inside then return false end
+    return kind == "party" or kind == "raid"
+end
+Q.InInstance = inInstance
+
+local function inCombat()
+    if InCombatLockdown and InCombatLockdown() then return true end
+    if UnitAffectingCombat and UnitAffectingCombat("player") then return true end
+    return false
+end
 
 ----------------------------------------------------------------------
 -- Own quest log
@@ -189,11 +208,12 @@ end
 -- quests and unshareable quests are skipped. There is no second attempt.
 function Q:ShareNew(added)
     if not OMQ:QuestShareOn() or not OMQ:GetChannel() then return end
+    local inside = inInstance()
     table.sort(added)
     for _, id in ipairs(added) do
         if received[id] then
             received[id] = nil
-        elseif pushable(id) and somebodyLacks(id) then
+        elseif not inside and pushable(id) and somebodyLacks(id) then
             queuePush(id)
         end
     end
@@ -223,6 +243,7 @@ function Q:StartRound()
     if not OMQ:QuestSyncOn() or not OMQ:GetChannel() then return end
     local me = OMQ:GetSelf()
     if not me then return end
+    if inInstance() then roundAfterInstance = true; return end    -- after the dungeon (decision 409)
     local order = turnOrder()
     local mine
     for i, guid in ipairs(order) do if guid == me.guid then mine = i end end
@@ -332,9 +353,20 @@ end
 local function processQueues()
     local now = GetTime()
     if changeDue and now >= changeDue then changeDue = nil; Q:Refresh() end
-    -- pushes: announce first, push SHARE_WAIT seconds later
+    -- inside a dungeon: pending pushes are dropped, a due round waits for the way out (decision 409)
+    local inside = inInstance()
+    if inside then
+        if #pushQueue > 0 then pushQueue = {} end
+        if round then round = nil; roundAfterInstance = true end
+    elseif roundAfterInstance and not roundStartAt then
+        roundAfterInstance = nil
+        roundStartAt = now + ROUND_DELAY
+    end
+    -- pushes: announce first, push SHARE_WAIT seconds later; held during a fight
     local item = pushQueue[1]
-    if item and now >= item.at and now >= nextPushAt then
+    local fighting = item and inCombat()
+    if fighting and item.step == 2 then item.step = 1 end         -- announce again after the fight
+    if item and not fighting and now >= item.at and now >= nextPushAt then
         if item.step == 1 then
             local me = OMQ:GetSelf()
             OMQ:Send("QS", item.id, me and me.guid or "")
@@ -442,7 +474,8 @@ OMQ:RegisterCommand("quests", function(arg)
     local n = 0
     for _ in pairs(myIds) do n = n + 1 end
     OMQ:Print(string.format("quest sync %s, %d quests in your log", OMQ.db.options.questSync and "on" or "off", n))
-    print("  automatic sharing " .. (OMQ.db.options.autoShare ~= false and "on" or "off"))
+    print("  automatic sharing " .. (OMQ.db.options.autoShare ~= false and "on" or "off")
+        .. (inInstance() and " (paused in this dungeon)" or ""))
     for guid, u in pairs(OMQ.users) do
         local count = 0
         for _ in pairs(u.quests or {}) do count = count + 1 end
