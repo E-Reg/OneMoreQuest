@@ -2,7 +2,8 @@
 -- When a merchant window opens:
 --   1. repair everything (if the merchant can repair)
 --   2. sell all grey items
---   3. mana classes from level 10 (not mages: they conjure it): buy the best water this merchant offers, up to 20 pieces
+--   3. mana classes from level 10 (not mages: they conjure it): buy the best water this merchant offers, up to 20 pieces;
+--      drinks I carry of the same or a higher level (that I can drink) count toward the 20 (decision 406)
 --   4. hunters: fill the free room of the quiver / ammo pouch with arrows (bow, crossbow) or bullets (gun)
 -- Each part can be switched with /omq qol repair|junk|water|ammo.
 local ADDON, OMQ = ...
@@ -16,6 +17,10 @@ local NO_MANA = { WARRIOR = true, ROGUE = true }
 local WATER = { 159, 1179, 1205, 1708, 1645, 8766 }
 local WATER_RANK = {}
 for i, id in ipairs(WATER) do WATER_RANK[id] = i end
+-- required level of the drinks we know (vendor water and the mage's conjured water); other drinks
+-- in the bags are recognised by their "Drink" spell and their required level from the item info
+local DRINK_LEVEL = { [159] = 1, [1179] = 5, [1205] = 15, [1708] = 25, [1645] = 35, [8766] = 45,
+                      [5350] = 1, [2288] = 5, [2136] = 15, [3772] = 25, [8077] = 35, [8078] = 45, [8079] = 55 }
 
 local Q = {}
 OMQ.QoL = Q
@@ -42,6 +47,42 @@ local function itemCount(id)
     if GetItemCount then return GetItemCount(id) or 0 end
     return 0
 end
+
+local function minLevel(id)
+    local f = (C_Item and C_Item.GetItemInfo) or GetItemInfo
+    if not f then return nil end
+    local ok, _, _, _, _, need = pcall(f, id)
+    if ok and type(need) == "number" and not isSecret(need) then return math.max(need, 1) end
+end
+
+-- level of a drink in the bags, nil when it is no drink
+local function drinkLevel(id)
+    if DRINK_LEVEL[id] then return DRINK_LEVEL[id] end
+    local V = OMQ.Vendor
+    if V and V.FoodKind then
+        local ok, kind = pcall(V.FoodKind, id)
+        if ok and kind == "drink" then return minLevel(id) end
+    end
+end
+
+-- pieces of drink in the bags with a level from minLvl up to my own level (decision 406)
+local function drinksAtLeast(minLvl)
+    local C = C_Container
+    if not (C and C.GetContainerNumSlots and C.GetContainerItemInfo) then return nil end
+    local my = UnitLevel("player") or 1
+    local have = 0
+    for bag = 0, OMQ.LastBag() do
+        for slot = 1, C.GetContainerNumSlots(bag) or 0 do
+            local info = C.GetContainerItemInfo(bag, slot)
+            if info and type(info.itemID) == "number" and not isSecret(info.itemID) then
+                local lvl = drinkLevel(info.itemID)
+                if lvl and lvl >= minLvl and lvl <= my then have = have + (info.stackCount or 1) end
+            end
+        end
+    end
+    return have
+end
+Q._drinksAtLeast = drinksAtLeast
 
 local function sellPrice(link)
     if C_Item and C_Item.GetItemInfo then
@@ -132,7 +173,10 @@ function Q:BuyWater()
         end
     end
     if not best then return end
-    local want = WATER_TARGET - itemCount(best.id)
+    -- a better drink I already carry counts too: no weaker water on top of 20 melon juice (decision 406)
+    local have = drinksAtLeast(DRINK_LEVEL[best.id] or 1)
+    if not have then have = itemCount(best.id) end
+    local want = WATER_TARGET - have
     if want <= 0 then return end
     local unit = best.price / best.qty
     local affordable = unit > 0 and math.floor((GetMoney() or 0) / unit) or want
