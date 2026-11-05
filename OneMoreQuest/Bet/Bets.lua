@@ -577,8 +577,19 @@ function B:OnActive(id, on, list)
     local b = bets[id]
     if not b or b.state ~= "join" then return end
     -- the starter's list is the truth (everybody gets the same picks)
+    local m = me()
+    local mine = m and b.answers[m.guid]
     b.answers = {}
     for g, p in tostring(list or ""):gmatch("([^:,]+):([^:,]+)") do b.answers[g] = p end
+    -- ...except my own seat, which only my own Join fills: his list may drop me or confirm me,
+    -- it may never sign me up for a stake or change the pick I made myself.
+    if m then
+        if not mine then
+            b.answers[m.guid] = mine                      -- never answered, or skipped: stays out
+        elseif b.answers[m.guid] ~= nil then
+            b.answers[m.guid] = mine                      -- he lists me: my own pick counts
+        end
+    end
     if on then activate(b) else b.state = "off"; b.reason = "fewer than 2 dads" end
     OMQ:Fire("BET_ACTIVE", id, on)
     fire()
@@ -622,9 +633,14 @@ function B:OnResult(id, winners, reason)
         local net = 0
         for _, p in ipairs(pays) do
             if p.from == m.guid then
-                l.owe[#l.owe + 1] = { id = id, kind = b.kind, to = p.to, toName = nameOf(p.to), toFull = fullNameOf(p.to),
-                                      amount = p.amount, state = "open", at = time() }
-                net = net - p.amount
+                -- a debt of mine never grows past the stake I agreed to, and never exists at all
+                -- for a bet I did not join myself (the pot is the stake, decision 162)
+                local owed = math.min(tonumber(p.amount) or 0, tonumber(b.stake) or 0)
+                if b.answers[m.guid] and owed > 0 then
+                    l.owe[#l.owe + 1] = { id = id, kind = b.kind, to = p.to, toName = nameOf(p.to), toFull = fullNameOf(p.to),
+                                          amount = owed, state = "open", at = time() }
+                    net = net - owed
+                end
             elseif p.to == m.guid then
                 l.get[#l.get + 1] = { id = id, kind = b.kind, from = p.from, fromName = nameOf(p.from), amount = p.amount,
                                       state = "open", at = time() }
@@ -640,6 +656,31 @@ function B:OnResult(id, winners, reason)
     fire()
 end
 
+----------------------------------------------------------------------
+-- Trust: a bet moves real gold by mail, so an incoming message is only
+-- believed as far as the game itself confirms it.
+----------------------------------------------------------------------
+-- The highest stake this starter could have set himself (decision 162: his level x 5 silver).
+-- His level comes from the game, never from the message; an unknown level falls back to my own
+-- cap, the way U:Allows lets an unknown level pass.
+local function stakeCap(starter)
+    local lvl = OMQ.Unlock and OMQ.Unlock.LevelOf and OMQ.Unlock.LevelOf(starter)
+    if type(lvl) == "number" and not isSecret(lvl) and lvl > 0 then return lvl * 500 end
+    return B.MaxStake()
+end
+
+-- Did this message really come from the bet's starter? He is the judge (isJudge), so only his
+-- word moves a bet along. A sender the addon cannot place is let through, not blocked.
+local function fromStarter(b, sender, channel)
+    if channel == "SIM" then return true end
+    if type(sender) ~= "string" or sender == "" then return true end
+    local u = OMQ.users and OMQ.users[b.starter]
+    local named = u and ((type(u.name) == "string" and u.name ~= "" and u.name ~= "?")
+        or (type(u.fullName) == "string" and u.fullName ~= ""))
+    if not named then return true end
+    return B.NameMatches(b.starter, sender)
+end
+
 OMQ:RegisterMessage("BS", function(f)
     local id, starter, kind, stake = f[1], f[2], f[3], tonumber(f[4])
     local m = me()
@@ -647,6 +688,8 @@ OMQ:RegisterMessage("BS", function(f)
     local u = OMQ.users and OMQ.users[starter]
     if not (u and OMQ:IsOnline(u)) then return end
     if OMQ.Unlock and not OMQ.Unlock:Has("bets") then return end      -- below level 5: no bets
+    -- a stake he could not have set himself is not a bet of his
+    if stake < 100 or stake > stakeCap(starter) then return end
     B:OnStart(id, starter, kind, stake, f[5] or "")
 end)
 
@@ -659,10 +702,11 @@ OMQ:RegisterMessage("BJ", function(f)
     fire()
 end)
 
-OMQ:RegisterMessage("BA", function(f)
+OMQ:RegisterMessage("BA", function(f, sender, channel)
     local b = bets[f[1] or ""]
     local m = me()
     if not b or (m and b.starter == m.guid) then return end
+    if not fromStarter(b, sender, channel) then return end
     B:OnActive(b.id, f[2] == "on", f[3])
 end)
 
@@ -672,10 +716,11 @@ OMQ:RegisterMessage("BV", function(f)
     B:OnValue(f[1], f[2], tonumber(f[3]), f[4], f[5])
 end)
 
-OMQ:RegisterMessage("BR", function(f)
+OMQ:RegisterMessage("BR", function(f, sender, channel)
     local b = bets[f[1] or ""]
     local m = me()
     if not b or (m and b.starter == m.guid) then return end
+    if not fromStarter(b, sender, channel) then return end
     local winners
     if f[2] and f[2] ~= "off" then
         winners = {}
