@@ -9,10 +9,14 @@
 -- QuestieDB), then every other item of class Quest in the bags. An item counts when it is in the bags and
 -- has an on-use spell (the game's own quest item needs no spell). The items of a finished quest (all
 -- objectives done, not yet turned in) are left out.
--- Combat: secure buttons cannot be shown, hidden, moved or given another item in combat. The column is its
--- own frame on UIParent, never anchored to the card, so the card stays free to come and go. In combat the
--- buttons stay as they are and where they are (an item right-clicked away or used up is dimmed); the
--- buttons are rebuilt and moved as soon as the combat ends.
+-- Combat: secure buttons cannot be shown, hidden, moved or given another item in combat. So every item has
+-- two buttons, one in the row under the player frame and one in the column next to the card, both on
+-- UIParent and never anchored to the card, so the card stays free to come and go. Out of combat only the
+-- button of the current place is shown. At the start of a fight (PLAYER_REGEN_DISABLED, before the
+-- lockdown) the other one is shown too, invisible (alpha 0): when the card opens or goes in combat, only
+-- the alpha changes, which the game allows, and the icons are at once where the card says. The invisible
+-- button ignores the right click and shows no tooltip. The list itself stays as it is in combat (an item
+-- right-clicked away or used up is dimmed); the buttons are rebuilt as soon as the combat ends.
 local ADDON, OMQ = ...
 OMQ = _G.OneMoreQuest
 
@@ -25,10 +29,12 @@ local QUEST_CLASS = 12
 -- the card is at least 380 wide and grows by 60 per dad over four (UI/QuestTracker.lua)
 local CARD_MIN, CARD_BASE, CARD_COL = 380, 144, 60
 
-local buttons = {}           -- the secure buttons, reused
+local PLACES = { "player", "tracker" }
+local sets = { player = {}, tracker = {} }   -- the secure buttons per place, reused
 local list = {}              -- { { item, qid } } the buttons hold, in order
 local pending = false        -- the column has to change once the combat ends
-local layout = nil           -- "tracker" or "player": where the icons were placed last
+local layout = nil           -- "tracker" or "player": the place whose buttons are visible
+local armed = false          -- both places shown for the fight (alpha decides which one is seen)
 local moveMode = false
 
 local function isSecret(v) return issecretvalue and issecretvalue(v) or false end
@@ -174,7 +180,7 @@ local attrs = {}             -- [button index] = { type1, item1 }, for /omq ques
 local function setAttr(i, k, v)
     attrs[i] = attrs[i] or {}
     attrs[i][k] = v
-    buttons[i]:SetAttribute(k, v)
+    for _, p in ipairs(PLACES) do sets[p][i]:SetAttribute(k, v) end
 end
 
 local function questTitle(qid)
@@ -182,8 +188,9 @@ local function questTitle(qid)
     return m and m.title
 end
 
-local function makeButton(i)
-    local b = CreateFrame("Button", "OneMoreQuestQuestItem" .. i, UIParent, "SecureActionButtonTemplate")
+local function makeButton(place, i)
+    local name = place == "player" and ("OneMoreQuestQuestItem" .. i) or ("OneMoreQuestQuestItemTracker" .. i)
+    local b = CreateFrame("Button", name, UIParent, "SecureActionButtonTemplate")
     b:SetSize(SIZE, SIZE)
     b:SetFrameStrata("MEDIUM")
     if b.SetFrameLevel then b:SetFrameLevel(20) end
@@ -201,14 +208,14 @@ local function makeButton(i)
         b.cd = CreateFrame("Cooldown", nil, b, "CooldownFrameTemplate")
         b.cd:SetAllPoints()
     end)
-    b.index = i
+    b.index, b.place = i, place
     -- only the left button uses the item (type1); the right button hides it
     b:SetScript("PostClick", function(self, button, down)
-        if button == "RightButton" and not down then Q:Dismiss(self.index) end
+        if button == "RightButton" and not down and self.place == layout then Q:Dismiss(self.index) end
     end)
     b:SetScript("OnEnter", function(self)
         local e = list[self.index]
-        if not (GameTooltip and e) then return end
+        if not (GameTooltip and e) or self.place ~= layout then return end
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         if GameTooltip.SetItemByID then GameTooltip:SetItemByID(e.item)
         else GameTooltip:SetHyperlink("item:" .. e.item) end
@@ -219,7 +226,7 @@ local function makeButton(i)
     end)
     b:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
     b:Hide()
-    buttons[i] = b
+    sets[place][i] = b
     return b
 end
 
@@ -268,20 +275,32 @@ local function place(b, i, layout)
 end
 
 -- count, cooldown and dimming; allowed in combat
+-- count, cooldown, dimming and which place is seen (alpha); allowed in combat
+local alphas = {}            -- [button] = alpha set last, for the tests
 local function refreshLooks()
     local f = (C_Container and C_Container.GetItemCooldown) or GetItemCooldown
     for i, e in ipairs(list) do
-        local b = buttons[i]
         local n = itemCount(e.item)
-        b.count:SetText(n > 1 and tostring(n) or "")
         local off = n == 0 or Q.IsHidden(e.item)
-        if b.icon.SetDesaturated then b.icon:SetDesaturated(off) end
-        b:SetAlpha(off and DIM or 1)
-        if b.cd and f then
-            local ok, start, dur, enabled = pcall(f, e.item)
+        local start, dur, enabled
+        if f then
+            local ok
+            ok, start, dur, enabled = pcall(f, e.item)
             start, dur = ok and num(start), ok and num(dur)
-            if start and dur and dur > 0 and enabled ~= 0 and enabled ~= false then b.cd:SetCooldown(start, dur)
-            elseif b.cd.Clear then b.cd:Clear() end
+        end
+        for _, p in ipairs(PLACES) do
+            local b = sets[p][i]
+            if b then
+                b.count:SetText(n > 1 and tostring(n) or "")
+                if b.icon.SetDesaturated then b.icon:SetDesaturated(off) end
+                local a = p ~= layout and 0 or (off and DIM or 1)
+                b:SetAlpha(a)
+                alphas[b] = a
+                if b.cd and f then
+                    if start and dur and dur > 0 and enabled ~= 0 and enabled ~= false then b.cd:SetCooldown(start, dur)
+                    elseif b.cd.Clear then b.cd:Clear() end
+                end
+            end
         end
     end
 end
@@ -295,29 +314,55 @@ end
 function Q:Update()
     local want = Q.Wanted()
     if inCombat() then
-        -- nothing secure may change now; catch up after the combat
-        pending = not same(want, list) or (#list > 0 and Q.Layout() ~= layout)
+        -- nothing secure may change now: the place follows the card by the alpha alone (both places are
+        -- shown since the start of the fight), the list catches up after the combat
+        if armed then layout = Q.Layout() end
+        pending = not same(want, list) or (#list > 0 and not armed and Q.Layout() ~= layout)
         refreshLooks()
         return
     end
-    pending = false
+    pending, armed = false, false
     layout = Q.Layout()
     for i, e in ipairs(want) do
-        local b = buttons[i] or makeButton(i)
+        for _, p in ipairs(PLACES) do
+            if not sets[p][i] then makeButton(p, i) end
+        end
         if not (list[i] and list[i].item == e.item) or not (attrs[i] and attrs[i].item1) then
             setAttr(i, "type1", "item")
             setAttr(i, "item1", "item:" .. e.item)
-            b.icon:SetTexture(itemIcon(e.item))
+            for _, p in ipairs(PLACES) do sets[p][i].icon:SetTexture(itemIcon(e.item)) end
         end
-        place(b, i, layout)
-        b:Show()
+        for _, p in ipairs(PLACES) do
+            local b = sets[p][i]
+            place(b, i, p)
+            if p == layout then b:Show() else b:Hide() end
+        end
     end
-    for i = #want + 1, #buttons do
+    for i = #want + 1, #sets.player do
         if attrs[i] and attrs[i].item1 then setAttr(i, "type1", nil); setAttr(i, "item1", nil) end
-        buttons[i]:Hide()
+        for _, p in ipairs(PLACES) do sets[p][i]:Hide() end
     end
     list = want
     refreshLooks()
+end
+
+-- the fight starts (PLAYER_REGEN_DISABLED comes before the lockdown): the buttons of the other place are
+-- shown too, invisible, so the icons can follow the card in combat by the alpha alone
+function Q:Arm()
+    if inCombat() then return end
+    for i = 1, #list do
+        for _, p in ipairs(PLACES) do
+            local b = sets[p][i]
+            if b then b:Show() end
+        end
+    end
+    armed = true
+    refreshLooks()
+end
+
+-- the card opened or went: the place follows at once (only the alpha changes, also in combat)
+function Q:Follow()
+    self:Update()
 end
 
 -- right click: the item is hidden until it is used by hand the next time
@@ -340,7 +385,7 @@ function Q:OnCast(spellID)
 end
 
 function Q:IsMouseOver()
-    for _, b in ipairs(buttons) do
+    for _, b in ipairs(sets[layout or "player"]) do
         if b:IsShown() and b.IsMouseOver then
             local ok, v = pcall(b.IsMouseOver, b)
             if ok and v then return true end
@@ -351,13 +396,16 @@ end
 function Q:List() return list end
 function Q:Pending() return pending end
 function Q:CurrentLayout() return layout end
+-- buttons the player sees: shown and of the visible place
 function Q:Shown()
     local n = 0
-    for _, b in ipairs(buttons) do if b:IsShown() then n = n + 1 end end
+    for _, b in ipairs(sets[layout or "player"]) do if b:IsShown() then n = n + 1 end end
     return n
 end
+function Q:Armed() return armed end
+function Q:Alpha(place, i) local b = sets[place][i]; return b and alphas[b] end
 function Q:Attr(i, k) return attrs[i] and attrs[i][k] end
-function Q:Button(i) return buttons[i] end
+function Q:Button(i, place) return sets[place or layout or "player"][i] end
 
 local function update()
     local ok, err = pcall(Q.Update, Q)
@@ -412,7 +460,7 @@ end, "quest item bar: what the game reports; 'reset' shows hidden items again")
 -- Wiring
 ----------------------------------------------------------------------
 local ev = CreateFrame("Frame")
-for _, e in ipairs({ "PLAYER_REGEN_ENABLED", "BAG_UPDATE_DELAYED", "UNIT_SPELLCAST_SUCCEEDED" }) do
+for _, e in ipairs({ "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED", "BAG_UPDATE_DELAYED", "UNIT_SPELLCAST_SUCCEEDED" }) do
     pcall(ev.RegisterEvent, ev, e)
 end
 ev:SetScript("OnEvent", function(_, event, unit, _, spellID)
@@ -421,10 +469,24 @@ ev:SetScript("OnEvent", function(_, event, unit, _, spellID)
         Q:OnCast(spellID)
     end
     update()
+    if event == "PLAYER_REGEN_DISABLED" then
+        local ok, err = pcall(Q.Arm, Q)
+        if not ok then OMQ:Error("questitem", err) end
+    end
 end)
 
 OMQ:On("READY", function()
     update()
+    -- the card's own show and hide move the icons at once (the ticker below is the safety net)
+    local card = OMQ.QTrackFrame and OMQ.QTrackFrame:Frame()
+    if card and card.HookScript then
+        local function follow()
+            local ok, err = pcall(Q.Follow, Q)
+            if not ok then OMQ:Error("questitem", err) end
+        end
+        pcall(card.HookScript, card, "OnShow", follow)
+        pcall(card.HookScript, card, "OnHide", follow)
+    end
     -- the card's place and the group size can change: follow them every second
     C_Timer.NewTicker(1, update)
 end)
