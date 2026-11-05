@@ -62,6 +62,10 @@ local function alertItems()
                 tip = "Checked: the highest learned rank of a spell has to be on a bar. Unchecked: any rank is fine.",
                 get = function() return not OMQ.db.alerts.lenientRank end,
                 set = function(v) OMQ.db.alerts.lenientRank = not v; OMQ.Alerts:Evaluate() end }
+            out[#out + 1] = { type = "check", indent = true, label = "New spells on your bar by themselves",
+                tip = "Checked: a newly learned spell goes on a free slot of the bar you see, a new rank replaces the older rank on your buttons. Rank 1 heals stay where they are, the new rank gets its own slot. Out of combat only.",
+                get = function() return OMQ.db.options.autoBar ~= false end,
+                set = function(v) OMQ.db.options.autoBar = v and true or false end }
         elseif id == "buff" then
             out[#out + 1] = { type = "check", indent = true, label = "Buff Tracking for non dads",
                 tip = "Checked: missing buffs are shown for every group member. Unchecked: only for players with the addon.",
