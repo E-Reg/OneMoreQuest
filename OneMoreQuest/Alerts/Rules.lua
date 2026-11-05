@@ -523,8 +523,9 @@ end)
 ----------------------------------------------------------------------
 local rankCache, rankCacheAt, rankDirty = nil, 0, true
 local rankFrame = CreateFrame("Frame")
-for _, e in ipairs({ "SPELLS_CHANGED", "ACTIONBAR_SLOT_CHANGED", "PLAYER_LEVEL_UP" }) do
-    rankFrame:RegisterEvent(e)
+for _, e in ipairs({ "SPELLS_CHANGED", "ACTIONBAR_SLOT_CHANGED", "PLAYER_LEVEL_UP",
+                    "UPDATE_BONUS_ACTIONBAR", "ACTIONBAR_PAGE_CHANGED" }) do
+    pcall(rankFrame.RegisterEvent, rankFrame, e)
 end
 rankFrame:SetScript("OnEvent", function() rankDirty = true end)
 
@@ -559,9 +560,30 @@ local function highestRanks()
     return best
 end
 
+-- the first slot of the main bar page the player sees right now (decision 403): a warrior's stance
+-- (also a druid's form or a rogue's stealth) swaps the main bar to its own page 73-120 (bonus bar),
+-- a paged main bar shows another page; slots 1-12 are then not on screen
+function M.MainBarBase()
+    local btn = _G.ActionButton1
+    local a = btn and btn.action
+    if type(a) == "number" and a >= 1 and a <= 120 then return math.floor((a - 1) / 12) * 12 end
+    local page = (GetActionBarPage and GetActionBarPage()) or 1
+    local offset = (GetBonusBarOffset and GetBonusBarOffset()) or 0
+    if page == 1 and offset > 0 then return ((NUM_ACTIONBAR_PAGES or 6) + offset - 1) * 12 end
+    return (page - 1) * 12
+end
+-- a warrior is always in a stance once he has learned one: his plain main page 1-12 is never shown,
+-- so a spell lying there (the game puts new spells there) is not on a bar for him (decision 403)
+local function hiddenPlainPage()
+    local _, class = UnitClass("player")
+    return class == "WARRIOR" and ((GetBonusBarOffset and GetBonusBarOffset()) or 0) > 0
+end
+M._hiddenPlainPage = hiddenPlainPage
+
 local function barSpells()
     local names, ids = {}, {}
-    for slot = 1, 120 do
+    local from = hiddenPlainPage() and 13 or 1
+    for slot = from, 120 do
         local kind, id = GetActionInfo(slot)
         if kind == "macro" and GetMacroSpell then
             local sid = GetMacroSpell(id)
@@ -626,21 +648,23 @@ end, "show the click casting bindings (read only)")
 
 -- "place it" (decision 240): a click puts the spells on the first free slots of the shown bars
 M.BAR_SLOTS = {
-    { from = 1, to = 12 },                                          -- main bar, always
+    { main = true },                                                -- main bar, always: the page on screen
     { from = 61, to = 72, frame = "MultiBarBottomLeft" },
     { from = 49, to = 60, frame = "MultiBarBottomRight" },
     { from = 25, to = 36, frame = "MultiBarRight" },
     { from = 37, to = 48, frame = "MultiBarLeft" },
 }
 function M.FreeSlots()
-    local out = {}
+    local out, seen = {}, {}
     if not HasAction then return out end
     for _, bar in ipairs(M.BAR_SLOTS) do
         local f = bar.frame and _G[bar.frame]
+        local from, to = bar.from, bar.to
+        if bar.main then from = M.MainBarBase() + 1; to = from + 11 end
         if not bar.frame or (f and f.IsShown and f:IsShown()) then
-            for slot = bar.from, bar.to do
+            for slot = from, to do
                 local ok, has = pcall(HasAction, slot)
-                if ok and not has then out[#out + 1] = slot end
+                if ok and not has and not seen[slot] then out[#out + 1] = slot; seen[slot] = true end
             end
         end
     end
@@ -667,6 +691,9 @@ function M.PlaceSpells(ids)
             placed = placed + 1
         end
         if ClearCursor then ClearCursor() end
+    end
+    if placed == 0 and #ids > 0 and #free > 0 then
+        OMQ:Print("Could not place the spell - drag it from your spellbook")
     end
     rankDirty = true
     return placed
