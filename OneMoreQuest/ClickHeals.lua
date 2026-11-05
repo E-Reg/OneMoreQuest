@@ -23,7 +23,8 @@ local SPELL = 1        -- Enum.ClickBindingType.Spell
 -- per class: the candidates in order of preference, the last known one wins (base spell ids)
 CH.HEALS = {
     PRIEST  = { LeftButton  = { 2050, 2061 },          -- Lesser Heal, from 20 Flash Heal
-                RightButton = { 2050, 2054, 2060 } },  -- Lesser Heal, from 16 Heal, from 40 Greater Heal
+                RightButton = { 2050, 2054, 2060, 139 } }, -- Lesser Heal, from 8 Renew (decision 405; Heal and
+                                                       -- Greater Heal only when Renew cannot be bound)
     PALADIN = { LeftButton  = { 635 },                 -- Holy Light
                 RightButton = { 635, 19750 } },        -- Holy Light, from 20 Flash of Light
     DRUID   = { LeftButton  = { 5185, 8936 },          -- Healing Touch, from 12 Regrowth
